@@ -11,6 +11,15 @@ from ..config import Config
 from ..engine import Engine, HOLD_DOWN, HOLD_UP, PASS, TAP
 from ..keys import KEYS, EV_MOD_NAME
 
+# evdev name -> its numpad twin, for keypads whose nav keys are numpad keys.
+NUMPAD_TWIN = {
+    "KEY_HOME": "KEY_KP7", "KEY_END": "KEY_KP1",
+    "KEY_PAGEUP": "KEY_KP9", "KEY_PAGEDOWN": "KEY_KP3",
+    "KEY_INSERT": "KEY_KP0", "KEY_DELETE": "KEY_KPDOT",
+    "KEY_UP": "KEY_KP8", "KEY_DOWN": "KEY_KP2",
+    "KEY_LEFT": "KEY_KP4", "KEY_RIGHT": "KEY_KP6",
+}
+
 
 EVDEV_HINT = ("python-evdev is required on Linux: pip install evdev\n"
               "Also ensure access to /dev/input/event* and /dev/uinput.")
@@ -100,6 +109,15 @@ def run(cfg: Config):
             if logical in cfg.mappings and dm.matches(vid, pid, name):
                 table = {ev_of[src]: act
                          for src, act in cfg.mappings[logical].items()}
+                # Same exposure as macOS: a keypad's nav keys are numpad keys,
+                # and evdev reports what the device actually sends. Accept the
+                # numpad twin for the same action so a KP7 press still means
+                # "home" — otherwise the key silently does nothing.
+                for src, act in cfg.mappings[logical].items():
+                    twin = NUMPAD_TWIN.get(KEYS[src].ev)
+                    code = getattr(ecodes, twin, None) if twin else None
+                    if code is not None:
+                        table.setdefault(code, act)
                 if cfg.swallow_numlock_quirk:
                     table.setdefault(ecodes.KEY_NUMLOCK, None)  # None = swallow
                 d.grab()

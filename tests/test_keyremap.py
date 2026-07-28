@@ -637,7 +637,8 @@ class TestLinuxBackendEndToEnd(unittest.TestCase):
         names = ["KEY_ESC", "KEY_HOME", "KEY_END", "KEY_A", "KEY_C",
                  "KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_PAGEUP", "KEY_PAGEDOWN",
                  "KEY_TAB", "KEY_BACKSPACE", "KEY_DELETE", "KEY_INSERT",
-                 "KEY_EQUAL", "KEY_NUMLOCK"]
+                 "KEY_EQUAL", "KEY_NUMLOCK", "KEY_KP7", "KEY_KP1", "KEY_KP9",
+                 "KEY_KP3", "KEY_KP0", "KEY_KPDOT"]
         for i, n in enumerate(names, start=1):
             setattr(ec, n, 100 + i)
         ec.EV_KEY = 1
@@ -732,6 +733,15 @@ class TestLinuxBackendEndToEnd(unittest.TestCase):
         writes = [(c, v) for k, c, v in written if k == "write"]
         self.assertIn((106, 1), writes)   # KEY_LEFTCTRL down
         self.assertIn((106, 0), writes)   # KEY_LEFTCTRL up
+
+    def test_numpad_twin_triggers_the_same_remap(self):
+        """A keypad sending KP7 instead of HOME must still do the mapping —
+        evdev reports what the device sends, not what the label says."""
+        # stub numbering: KEY_HOME=102 (mapped), KEY_KP7=116 (its twin)
+        written, _ = self._run({"home": "end"}, [(116, 1), (116, 0)])
+        writes = [(c, v) for k, c, v in written if k == "write"]
+        self.assertTrue(writes, "KP7 produced nothing — the twin is not accepted")
+        self.assertIn((103, 1), writes)   # KEY_END pressed
 
     def test_unmapped_key_passes_through_untouched(self):
         written, _ = self._run({"esc": "home"}, [(110, 1)])  # KEY_TAB unmapped

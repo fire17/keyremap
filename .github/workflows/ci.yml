@@ -243,6 +243,44 @@ jobs:
           keyremap --help | head -3
           keyremap check | tail -3
           keyremap selftest
+      - name: the native GUI must launch on macOS (never verified there before)
+        run: |
+          # GitHub's macOS runners have a window server session, so tkinter can
+          # actually open a window. Launch, hold, verify alive, then close.
+          python - <<'PY'
+          import subprocess, sys, time, os
+          env = dict(os.environ)
+          p = subprocess.Popen([sys.executable, "remap.py", "gui"],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                               text=True, env=env)
+          time.sleep(8)
+          if p.poll() is not None:
+              out = p.stdout.read()
+              print("GUI EXITED EARLY:\n" + out)
+              # tkinter missing is a known-acceptable outcome; a crash is not
+              if "tkinter is not available" in out:
+                  print("::warning::no tcl/tk in this python - web UI is the fallback")
+                  sys.exit(0)
+              sys.exit(1)
+          print("native GUI ran for 8s on macOS without crashing")
+          p.terminate()
+          try:
+              p.wait(timeout=10)
+          except subprocess.TimeoutExpired:
+              p.kill()
+          PY
+
+      - name: the browser UI must serve on macOS
+        run: |
+          python remap.py gui --web --port 8899 --no-open &
+          sleep 5
+          curl -fsS -o /tmp/page.html -w "web UI: %{http_code} %{size_download} bytes\n" \
+            http://127.0.0.1:8899/
+          grep -q "keyremap" /tmp/page.html && echo "page renders the app"
+          curl -fsS http://127.0.0.1:8899/api/mappings | python3 -c \
+            "import json,sys; print('mappings via API:', len(json.load(sys.stdin)))"
+          kill %1 || true
+
       - name: run the formula's own test block
         run: brew test local/keyremap/keyremap
       - name: uninstall cleanly

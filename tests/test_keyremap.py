@@ -984,3 +984,109 @@ class TestEncodingSafety(unittest.TestCase):
             f.write("profiles:\n  base:\n    kp:\n      esc: home\n")
         cfg = cfgmod.load(p, plat="darwin", host="mac")
         self.assertEqual(cfg.mappings["kp"]["esc"].press[0][1], "home")
+
+
+class TestCrossPlatformEquivalence(unittest.TestCase):
+    """'The same mapping on every machine' is the whole promise — but Windows
+    and Linux run keyremap's engine while macOS hands the job to Karabiner.
+    Two implementations of one contract can drift. This simulates Karabiner's
+    documented semantics and asserts it agrees with the engine, event for event.
+    """
+
+    @staticmethod
+    def _karabiner_sim(manip, events, hold_ms):
+        """Karabiner's basic-manipulator semantics, per its documentation:
+        `to` fires on key-down; `to_if_held_down` fires once the key has been
+        held past the threshold; `to_if_alone` fires on release only if the key
+        was released before then (and is suppressed once held fired)."""
+        out, down_at, held_fired = [], None, False
+
+        def emit(field):
+            for t in manip.get(field, []):
+                mods = t.get("modifiers", [])
+                out.append("+".join(mods + [t["key_code"]]))
+
+        for kind, t in events:
+            if kind == "down":
+                down_at, held_fired = t, False
+                emit("to")
+            elif kind == "tick":
+                if (down_at is not None and not held_fired
+                        and t - down_at >= hold_ms and "to_if_held_down" in manip):
+                    held_fired = True
+                    emit("to_if_held_down")
+            elif kind == "up":
+                if not held_fired:
+                    emit("to_if_alone")
+                down_at = None
+        return out
+
+    def _engine_run(self, act, events):
+        from keyremap.engine import Engine
+        e = Engine({1: act})
+        out = []
+        for kind, t in events:
+            if kind == "down":
+                out += e.feed(1, 1, t)
+            elif kind == "up":
+                out += e.feed(1, 0, t)
+            else:
+                out += e.due(t)
+        # normalise engine output to the same "mods+key" strings
+        norm = []
+        for o in out:
+            if o.target is None:
+                continue
+            mods, key = o.target
+            mods = ["left_command" if m == "accel" else m for m in mods]
+            norm.append("+".join(mods + [key]))
+        return norm
+
+    def _mac_manip(self, mapping, src_kb):
+        doc = json.loads(json.dumps(BASE_DOC))
+        doc["profiles"] = {"base": {"kp": mapping}}
+        cfg = cfgmod.load(write_cfg(doc), plat="darwin", host="mac")
+        rules = json.loads(mac.generate(cfg))["rules"][0]["manipulators"]
+        return next(m for m in rules if m["from"]["key_code"] == src_kb), cfg
+
+    def _compare(self, mapping, src, src_kb, events, hold_ms):
+        manip, cfg = self._mac_manip(mapping, src_kb)
+        act = cfg.mappings["kp"][src]
+        mac_out = self._karabiner_sim(manip, events, hold_ms)
+        eng_out = self._engine_run(act, events)
+        # compare key names only (mac uses Karabiner spellings)
+        strip = lambda seq: [s.split("+")[-1] for s in seq]
+        self.assertEqual(strip(mac_out), strip(eng_out),
+                         f"macOS and engine disagree: {mac_out} vs {eng_out}")
+        return mac_out
+
+    def test_tap_path_agrees(self):
+        m = {"home": {"tap": "accel+a", "hold": ["accel+a", "accel+c"],
+                      "hold_ms": 400}}
+        ev = [("down", 0), ("tick", 100), ("up", 120)]      # quick tap
+        out = self._compare(m, "home", "home", ev, 400)
+        self.assertEqual([s.split("+")[-1] for s in out], ["a"])
+
+    def test_hold_path_agrees(self):
+        m = {"home": {"tap": "accel+a", "hold": ["accel+a", "accel+c"],
+                      "hold_ms": 400}}
+        ev = [("down", 0), ("tick", 400), ("up", 600)]      # held past threshold
+        out = self._compare(m, "home", "home", ev, 400)
+        self.assertEqual([s.split("+")[-1] for s in out], ["a", "c"])
+
+    def test_hold_suppresses_tap_on_both(self):
+        m = {"home": {"tap": "accel+a", "hold": "accel+c", "hold_ms": 300}}
+        ev = [("down", 0), ("tick", 300), ("up", 900)]
+        out = self._compare(m, "home", "home", ev, 300)
+        self.assertNotIn("a", [s.split("+")[-1] for s in out])
+
+    def test_simple_press_agrees(self):
+        m = {"esc": "home"}
+        ev = [("down", 0), ("up", 50)]
+        self._compare(m, "esc", "escape", ev, 1000)
+
+    def test_boundary_release_one_ms_early_is_a_tap_on_both(self):
+        m = {"home": {"tap": "accel+a", "hold": "accel+c", "hold_ms": 400}}
+        ev = [("down", 0), ("tick", 399), ("up", 399)]
+        out = self._compare(m, "home", "home", ev, 400)
+        self.assertEqual([s.split("+")[-1] for s in out], ["a"])

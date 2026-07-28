@@ -4,7 +4,7 @@
 
 [![ci](https://github.com/fire17/keyremap/actions/workflows/ci.yml/badge.svg)](https://github.com/fire17/keyremap/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/fire17/keyremap?color=c3a6ff)](https://github.com/fire17/keyremap/releases/latest)
-[![tests](https://img.shields.io/badge/tests-87%20passing-5ddba4)](tests/test_keyremap.py)
+[![tests](https://img.shields.io/badge/tests-92%20passing-5ddba4)](tests/test_keyremap.py)
 [![dependencies](https://img.shields.io/badge/dependencies-none-5ddba4)](#-quickstart)
 [![platforms](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-verified%20in%20CI-5cc8ff)](.github/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -255,6 +255,12 @@ flowchart TD
   ✓ hold -> ctrl+a then ctrl+c, at the threshold
   ALL LIVE KERNEL CHECKS PASSED
   ```
+
+**Cross-platform equivalence is proven, not assumed.** Windows and Linux run keyremap's own
+engine, while macOS hands the job to Karabiner — two implementations of one contract, which
+could drift. A test simulates Karabiner's documented semantics (`to`, `to_if_alone`,
+`to_if_held_down` and their thresholds) and asserts it agrees with the engine event-for-event,
+including the boundary where a key is released 1 ms before the hold threshold.
 
 Two more nets catch what logic tests cannot: **Karabiner's own key-code vocabulary is vendored**
 (206 upstream codes; all 124 keyremap can emit are checked against it), and the **validators have

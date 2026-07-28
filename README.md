@@ -4,7 +4,7 @@
 
 [![ci](https://github.com/fire17/keyremap/actions/workflows/ci.yml/badge.svg)](https://github.com/fire17/keyremap/actions/workflows/ci.yml)
 [![tests](https://img.shields.io/badge/tests-70%20passing-5ddba4)](tests/test_keyremap.py)
-[![dependencies](https://img.shields.io/badge/dependencies-none-5ddba4)](#install)
+[![dependencies](https://img.shields.io/badge/dependencies-none-5ddba4)](#-quickstart)
 [![platforms](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-verified%20in%20CI-5cc8ff)](.github/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![stars](https://img.shields.io/github/stars/fire17/keyremap?style=social)](https://github.com/fire17/keyremap/stargazers)

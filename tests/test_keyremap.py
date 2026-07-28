@@ -1414,3 +1414,65 @@ class TestNoRegressionAgainstDeployed(unittest.TestCase):
         for mod in ("LCtrl", "LShift"):
             self.assertIn(f"{{{mod} Down}}", self.script)
             self.assertIn(f"{{{mod} Up}}", self.script)
+
+
+class TestService(unittest.TestCase):
+    """A remapper that dies silently is worse than one that never started —
+    the keys just quietly do the wrong thing."""
+
+    def setUp(self):
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.cfg = cfgmod.load(os.path.join(here, "config.yaml"),
+                               plat="linux", host="x")
+
+    def _run(self, env, dry=True):
+        import io, contextlib
+        from keyremap import envinfo, service
+        real = envinfo.detect
+        envinfo.detect = lambda: env
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                code = service.run(self.cfg, dry_run=dry)
+        finally:
+            envinfo.detect = real
+        return code, buf.getvalue()
+
+    def test_linux_unit_restarts_on_failure(self):
+        _, out = self._run("linux")
+        self.assertIn("Restart=on-failure", out)
+        self.assertIn("WantedBy=default.target", out)
+        self.assertIn("dry-run", out)      # nothing written
+
+    def test_linux_dry_run_writes_nothing(self):
+        unit = os.path.expanduser("~/.config/systemd/user/keyremap.service")
+        existed = os.path.exists(unit)
+        self._run("linux", dry=True)
+        self.assertEqual(existed, os.path.exists(unit))
+
+    def test_windows_uses_a_restarting_logon_task(self):
+        from keyremap.backends import windows as be
+        real = be.find_autohotkey
+        be.find_autohotkey = lambda: r"C:\AHK\AutoHotkey64.exe"
+        try:
+            code, out = self._run("wsl")
+        finally:
+            be.find_autohotkey = real
+        self.assertEqual(code, 0)
+        self.assertIn("restarts the remap if it dies", out)
+
+    def test_macos_reports_rather_than_installs(self):
+        """Karabiner is already a managed service; inventing another would be
+        two things fighting over the same rule."""
+        _, out = self._run("macos")
+        self.assertIn("needs no service", out)
+        self.assertNotIn("systemd", out)
+
+    def test_systemd_unit_is_wellformed(self):
+        from keyremap.service import SYSTEMD_UNIT
+        text = SYSTEMD_UNIT.format(python="/usr/bin/python3", remap="/x/remap.py")
+        import configparser
+        cp = configparser.ConfigParser()
+        cp.read_string(text)
+        self.assertEqual(cp["Service"]["Restart"], "on-failure")
+        self.assertIn("remap.py apply", cp["Service"]["ExecStart"])

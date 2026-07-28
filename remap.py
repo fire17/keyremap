@@ -9,6 +9,7 @@
   setup             walk a new machine from nothing to working
   doctor            what this machine is missing, and the exact fix
   report            one pasteable diagnostic block (redacted, read-only)
+  service           keep the remap alive across logins and crashes
   selftest          prove the install is sound on this machine
   adopt             point the config at the device THIS machine reports
   apply             build/run remapping for this OS
@@ -161,6 +162,11 @@ def cmd_gui(cfg, env, args):
     return serve(cfg.path, port=args.port, open_browser=not args.no_open)
 
 
+def cmd_service(cfg, env, args):
+    from keyremap.service import run
+    return run(cfg, dry_run=args.dry_run)
+
+
 def cmd_report(cfg, env, args):
     from keyremap.report import run
     return run(cfg)
@@ -218,6 +224,8 @@ def main():
     sub.add_parser("doctor")
     sub.add_parser("selftest")
     sub.add_parser("report")
+    sv = sub.add_parser("service")
+    sv.add_argument("--dry-run", action="store_true")
     st = sub.add_parser("setup")
     st.add_argument("--yes", action="store_true", help="accept every prompt")
     st.add_argument("--dry-run", action="store_true")
@@ -243,7 +251,7 @@ def main():
         "tui": cmd_tui, "gui": cmd_gui, "detect": cmd_detect, "listen": cmd_listen,
         "check": cmd_check, "doctor": cmd_doctor, "apply": cmd_apply,
         "selftest": cmd_selftest, "adopt": cmd_adopt, "setup": cmd_setup,
-        "report": cmd_report,
+        "report": cmd_report, "service": cmd_service,
         "export": cmd_export, "import": cmd_import,
     }[cmd](cfg, env, args)
 

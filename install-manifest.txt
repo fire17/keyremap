@@ -20,6 +20,7 @@ keyremap/miniyaml.py
 keyremap/portable.py
 keyremap/report.py
 keyremap/selftest.py
+keyremap/service.py
 keyremap/setup.py
 keyremap/state.py
 keyremap/tui/__init__.py

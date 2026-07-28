@@ -4,7 +4,7 @@
 
 [![ci](https://github.com/fire17/keyremap/actions/workflows/ci.yml/badge.svg)](https://github.com/fire17/keyremap/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/fire17/keyremap?color=c3a6ff)](https://github.com/fire17/keyremap/releases/latest)
-[![tests](https://img.shields.io/badge/tests-120%20passing-5ddba4)](tests/test_keyremap.py)
+[![tests](https://img.shields.io/badge/tests-125%20passing-5ddba4)](tests/test_keyremap.py)
 [![dependencies](https://img.shields.io/badge/dependencies-none-5ddba4)](#-quickstart)
 [![platforms](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-verified%20in%20CI-5cc8ff)](.github/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -60,6 +60,7 @@ configuration problem, it's an interception problem.
 ```sh
 curl -fsSL https://raw.githubusercontent.com/fire17/keyremap/HEAD/install.sh | sh
 keyremap setup        # walks a new machine from nothing to working
+keyremap service      # keep it alive across logins and crashes
 keyremap selftest     # proves the install is sound on THIS machine
 keyremap apply        # build, deploy, and switch it on
 ```
@@ -163,6 +164,11 @@ profiles:
     tamis-mac:
       keypad: { tab: null }      # only on that machine
 ```
+
+`keyremap service` handles persistence properly per platform: a Windows **Scheduled Task**
+that restarts the remap if it dies (the Startup folder only ever launches it once), a
+**systemd user unit** with `Restart=on-failure` on Linux, and nothing on macOS — Karabiner is
+already a managed service, so inventing a second one would just fight it.
 
 | Field | Fires |
 |---|---|

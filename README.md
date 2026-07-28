@@ -217,7 +217,13 @@ flowchart TD
   style F fill:#0f2a1f,stroke:#5ddba4,color:#e8ebf2
 ```
 
-**Every push runs on real macOS, Linux and Windows runners**, and two jobs go further:
+**Every push runs on real macOS, Linux and Windows runners**, and three jobs go further:
+
+- **`fresh-machine journey`** runs what a new user actually types, on a real Mac and a real
+  Linux box: `./install.sh` → `keyremap check` → `doctor` → `selftest` → `export`/`import` →
+  `apply`, then asserts the rule is **live in Karabiner's profile**, that a re-install preserves
+  an edited config, and that uninstalling leaves nothing behind. (This job found a broken
+  install on its very first run — see the defects table.)
 
 - **`karabiner lint (real macOS)`** installs Karabiner-Elements and runs **its own**
   `karabiner_cli --lint-complex-modifications` against the generated rule, then installs it into
@@ -262,6 +268,9 @@ Each of these shipped-looking-fine and was found by *running* the thing, not by 
 | `import` wrote YAML into `.json` | round-trip test | an unreadable config after migrating machines |
 | `Map.Delete` on an absent key (AHK v2) | live use | one key silently dead while all others worked |
 | keypad auto-repeat restarting hold timers | live use | hold actions never firing |
+| install.sh shipping a stale file list | fresh-machine CI | **every command crashing on a new machine** |
+| `OWNER/keyremap` left in the install URL | fresh-machine CI | the README's one-liner 404-ing for everyone |
+| `SRC` set but `$SRC_DIR` read | fresh-machine CI | a clone install silently going to the network |
 
 </details>
 

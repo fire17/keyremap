@@ -77,6 +77,17 @@ def build(cfg) -> str:
     except Exception as e:  # noqa: BLE001
         add(f"_doctor failed: {type(e).__name__}: {e}_")
 
+    # A fingerprint of RESOLVED BEHAVIOUR, independent of platform artifacts.
+    # Compare it between two machines: identical hash == identical mapping,
+    # which is exactly the promise this project makes.
+    behaviour = "\n".join(
+        f"{dev}.{src}={act.describe()}"
+        for dev, table in sorted(cfg.mappings.items())
+        for src, act in sorted(table.items()))
+    add(f"\n**Behaviour hash**: `"
+        f"{hashlib.sha256(behaviour.encode()).hexdigest()[:16]}`  "
+        f"— same hash on two machines means the same effective mapping\n")
+
     add("\n**Generated artifact**\n")
     try:
         plat = {"macos": "darwin", "wsl": "windows",

@@ -4,7 +4,7 @@
 
 [![ci](https://github.com/fire17/keyremap/actions/workflows/ci.yml/badge.svg)](https://github.com/fire17/keyremap/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/fire17/keyremap?color=c3a6ff)](https://github.com/fire17/keyremap/releases/latest)
-[![tests](https://img.shields.io/badge/tests-99%20passing-5ddba4)](tests/test_keyremap.py)
+[![tests](https://img.shields.io/badge/tests-101%20passing-5ddba4)](tests/test_keyremap.py)
 [![dependencies](https://img.shields.io/badge/dependencies-none-5ddba4)](#-quickstart)
 [![platforms](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-verified%20in%20CI-5cc8ff)](.github/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -255,6 +255,11 @@ flowchart TD
   ✓ hold -> ctrl+a then ctrl+c, at the threshold
   ALL LIVE KERNEL CHECKS PASSED
   ```
+
+**You can check it yourself, in one line.** `keyremap report` prints a **behaviour hash** —
+a fingerprint of the resolved mapping. Run it on two machines and compare: the same hash means
+the same effective mapping, regardless of platform. (A test asserts macOS, Windows and Linux
+all produce the same hash from the same config, and that changing any mapping changes it.)
 
 **Cross-platform equivalence is proven, not assumed.** Windows and Linux run keyremap's own
 engine, while macOS hands the job to Karabiner — two implementations of one contract, which

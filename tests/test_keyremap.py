@@ -1147,7 +1147,7 @@ class TestReport(unittest.TestCase):
     def test_contains_what_a_helper_actually_needs(self):
         for needed in ("keyremap report", "layers applied",
                        "Devices this machine", "Doctor", "Effective mappings",
-                       "sha256"):
+                       "Behaviour hash"):
             self.assertIn(needed, self.text, f"report is missing {needed!r}")
 
     def test_redacts_both_posix_and_windows_usernames(self):
@@ -1178,6 +1178,36 @@ class TestReport(unittest.TestCase):
         finally:
             doctor.run, backends.get_backend = real_doctor, real_get
         self.assertEqual(before, os.path.getmtime(self.cfg.path))
+
+    def test_behaviour_hash_is_platform_independent(self):
+        """The whole promise: the same config means the same mapping. Two
+        platforms resolving the same layers must produce the same hash."""
+        import hashlib
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+        def h(plat):
+            c = cfgmod.load(os.path.join(here, "config.yaml"), plat=plat,
+                            host="same-host")
+            b = "\n".join(f"{d}.{s}={a.describe()}"
+                          for d, t in sorted(c.mappings.items())
+                          for s, a in sorted(t.items()))
+            return hashlib.sha256(b.encode()).hexdigest()[:16]
+
+        self.assertEqual(h("darwin"), h("windows"),
+                         "macOS and Windows resolve to different behaviour")
+        self.assertEqual(h("darwin"), h("linux"))
+
+    def test_behaviour_hash_changes_when_a_mapping_changes(self):
+        import hashlib
+        doc = json.loads(json.dumps(BASE_DOC))
+        doc["profiles"] = {"base": {"kp": {"esc": "home"}}}
+        a = cfgmod.load(write_cfg(doc), plat="linux", host="x")
+        doc["profiles"] = {"base": {"kp": {"esc": "end"}}}
+        b = cfgmod.load(write_cfg(doc), plat="linux", host="x")
+        f = lambda c: hashlib.sha256("\n".join(
+            f"{d}.{s}={act.describe()}" for d, t in sorted(c.mappings.items())
+            for s, act in sorted(t.items())).encode()).hexdigest()
+        self.assertNotEqual(f(a), f(b))
 
     def test_redaction_helper_handles_both_conventions(self):
         from keyremap.report import _redact

@@ -40,6 +40,20 @@ def detect(cfg: Config) -> list[dict]:
     return out
 
 
+# A keypad's nav keys are usually numpad keys in disguise: Windows converts
+# them (NumLock churn + an E0 scancode), but macOS reads the HID usage, so the
+# same physical key can arrive as keypad_7 instead of home. Matching both costs
+# nothing — the rule is already scoped to one device — and turns a silent
+# no-match into a working key.
+NUMPAD_TWIN = {
+    "home": "keypad_7", "end": "keypad_1",
+    "page_up": "keypad_9", "page_down": "keypad_3",
+    "insert": "keypad_0", "delete_forward": "keypad_period",
+    "clear": "keypad_5", "up_arrow": "keypad_8", "down_arrow": "keypad_2",
+    "left_arrow": "keypad_4", "right_arrow": "keypad_6",
+}
+
+
 def generate(cfg: Config) -> str:
     rules = []
     for dev, table in cfg.mappings.items():
@@ -79,6 +93,12 @@ def generate(cfg: Config) -> str:
             if params:
                 m["parameters"] = params
             manips.append(m)
+
+            twin = NUMPAD_TWIN.get(m["from"]["key_code"])
+            if twin:
+                alt = json.loads(json.dumps(m))     # same behaviour, other code
+                alt["from"]["key_code"] = twin
+                manips.append(alt)
         rules.append({"description": f"keyremap: {dev}", "manipulators": manips})
     return json.dumps({"title": "keyremap (generated)", "rules": rules}, indent=2)
 

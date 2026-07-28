@@ -1214,3 +1214,48 @@ class TestReport(unittest.TestCase):
         out = _redact("C:\\Users\\Alice\\x and /home/bob/y and /Users/carol/z")
         for name in ("Alice", "bob", "carol"):
             self.assertNotIn(name, out)
+
+
+class TestMacNumpadTwins(unittest.TestCase):
+    """A keypad's nav keys are numpad keys in disguise. Windows converts them;
+    macOS reads the raw HID usage, so `home` can arrive as `keypad_7` and the
+    rule would silently match nothing — the worst failure, because it looks
+    like success."""
+
+    def _doc(self):
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        cfg = cfgmod.load(os.path.join(here, "config.yaml"),
+                          plat="darwin", host="mac")
+        return json.loads(mac.generate(cfg)), cfg
+
+    def test_nav_keys_also_match_their_numpad_twin(self):
+        doc, _ = self._doc()
+        froms = [m["from"]["key_code"] for m in doc["rules"][0]["manipulators"]]
+        for nav, twin in (("home", "keypad_7"), ("end", "keypad_1"),
+                          ("page_up", "keypad_9"), ("page_down", "keypad_3"),
+                          ("insert", "keypad_0"),
+                          ("delete_forward", "keypad_period")):
+            if nav in froms:
+                self.assertIn(twin, froms, f"{nav} has no {twin} fallback")
+
+    def test_twin_carries_identical_behaviour(self):
+        doc, _ = self._doc()
+        by_from = {m["from"]["key_code"]: m
+                   for m in doc["rules"][0]["manipulators"]}
+        strip = lambda m: {k: v for k, v in m.items() if k != "from"}
+        self.assertEqual(strip(by_from["home"]), strip(by_from["keypad_7"]),
+                         "the twin must do exactly what the nav key does")
+
+    def test_twins_use_real_karabiner_codes(self):
+        from keyremap.validate import upstream_key_codes, validate_karabiner
+        doc, _ = self._doc()
+        upstream = upstream_key_codes()
+        for m in doc["rules"][0]["manipulators"]:
+            self.assertIn(m["from"]["key_code"], upstream)
+        self.assertEqual(validate_karabiner(json.dumps(doc)), [])
+
+    def test_no_twin_for_keys_that_are_not_numpad_derived(self):
+        doc, _ = self._doc()
+        froms = [m["from"]["key_code"] for m in doc["rules"][0]["manipulators"]]
+        self.assertEqual(froms.count("tab"), 1)
+        self.assertEqual(froms.count("escape"), 1)

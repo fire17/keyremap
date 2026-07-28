@@ -4,7 +4,7 @@
 
 [![ci](https://github.com/fire17/keyremap/actions/workflows/ci.yml/badge.svg)](https://github.com/fire17/keyremap/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/fire17/keyremap?color=c3a6ff)](https://github.com/fire17/keyremap/releases/latest)
-[![tests](https://img.shields.io/badge/tests-110%20passing-5ddba4)](tests/test_keyremap.py)
+[![tests](https://img.shields.io/badge/tests-116%20passing-5ddba4)](tests/test_keyremap.py)
 [![dependencies](https://img.shields.io/badge/dependencies-none-5ddba4)](#-quickstart)
 [![platforms](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-verified%20in%20CI-5cc8ff)](.github/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -169,6 +169,19 @@ profiles:
 | [`press`](#️-config) | immediately on key-down (the default for a plain `key: target` line) |
 | [`tap`](#️-config) | on release — only if released before `hold_ms` |
 | [`hold`](#️-config) | at the `hold_ms` mark while still held; suppresses `tap` |
+| [`also_match`](#️-config) | extra **source** spellings that trigger the same action |
+
+`also_match` exists because platforms disagree about what a physical key reports. Numpad
+twins are handled automatically, but if your device reports something unexpected, read the
+code from `keyremap report` (or Karabiner's EventViewer) and name it — **Karabiner's own
+spellings work verbatim**, so `keypad_7`, `delete_or_backspace` and `page_down` can be pasted
+straight in:
+
+```yaml
+      home:
+        press: end
+        also_match: [keypad_7, clear]   # same action, other spellings
+```
 
 Any of them may be a **list**, which runs as a sequence. That is how "tap = select all, hold =
 select all **and** copy" works: seeing the selection appear *late* is your proof the copy ran too.

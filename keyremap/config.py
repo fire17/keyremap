@@ -69,6 +69,11 @@ class Action:
     tap: list[Target] | None = None
     hold: list[Target] | None = None
     hold_ms: int = DEFAULT_HOLD_MS
+    # Extra SOURCE spellings that should trigger this same action. Platforms
+    # disagree about what a physical key reports (a keypad's Home may arrive as
+    # keypad_7), and rather than wait for a code change you can name the
+    # alternates here. Built-in numpad twins are added automatically.
+    also_match: list[str] = field(default_factory=list)
 
     @property
     def is_simple(self) -> bool:
@@ -165,7 +170,12 @@ def _parse_action(src, spec) -> Action:
     hold_ms = int(spec.get("hold_ms", DEFAULT_HOLD_MS))
     if hold_ms <= 0:
         raise ValueError(f"hold_ms for {src!r} must be positive")
+    alts = spec.get("also_match") or []
+    if isinstance(alts, str):
+        alts = [alts]
+    alts = [canon(str(a)) for a in alts]
     return Action(
+        also_match=alts,
         press=_parse_seq(press) if press is not None else None,
         tap=_parse_seq(tap) if tap is not None else None,
         hold=_parse_seq(hold) if hold is not None else None,

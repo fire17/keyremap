@@ -1308,3 +1308,51 @@ class TestMacNumlockSwallow(unittest.TestCase):
         doc, _ = self._rules(True)
         self.assertEqual(validate_karabiner(json.dumps(doc)), [])
         self.assertIn("vk_none", upstream_key_codes())
+
+
+class TestAlsoMatch(unittest.TestCase):
+    """Platforms disagree about what a physical key reports. `also_match` lets
+    a user name the alternates in config instead of waiting for a code change."""
+
+    def _cfg(self, plat, alts=("keypad_5", "clear")):
+        doc = json.loads(json.dumps(BASE_DOC))
+        # a bare string must stay a string — list("clear") would become chars
+        value = alts if isinstance(alts, str) else list(alts)
+        doc["profiles"] = {"base": {"kp": {
+            "home": {"press": "end", "also_match": value}}}}
+        return cfgmod.load(write_cfg(doc), plat=plat, host="x")
+
+    def test_parsed_and_canonicalised(self):
+        cfg = self._cfg("linux")
+        act = cfg.mappings["kp"]["home"]
+        self.assertEqual(act.also_match, ["kp5", "clear"])
+
+    def test_single_string_is_accepted(self):
+        cfg = self._cfg("linux", alts="clear")
+        self.assertEqual(cfg.mappings["kp"]["home"].also_match, ["clear"])
+
+    def test_macos_emits_a_manipulator_per_alternate(self):
+        doc = json.loads(mac.generate(self._cfg("darwin")))
+        froms = [m["from"]["key_code"] for m in doc["rules"][0]["manipulators"]]
+        self.assertIn("home", froms)
+        self.assertIn("keypad_7", froms)    # automatic twin
+        self.assertIn("keypad_5", froms)    # declared alternate
+        self.assertIn("clear", froms)
+
+    def test_windows_subscribes_each_alternate_to_one_handler(self):
+        s = win.generate_interception(self._cfg("windows"))
+        self.assertIn("also_match kp5", s)
+        self.assertIn("also_match clear", s)
+        # every subscription must point at the same defined handler
+        import re
+        handlers = set(re.findall(r"SubscribeKey\([^,]+,[^,]+,\s*\w+,\s*(\w+)", s))
+        for h in handlers:
+            self.assertIn(f"{h}(state)", s)
+
+    def test_unknown_alternate_is_rejected_loudly(self):
+        with self.assertRaises(KeyError):
+            self._cfg("linux", alts=("nosuchkey",))
+
+    def test_absent_by_default(self):
+        cfg = cfgmod.load(write_cfg(BASE_DOC), plat="linux", host="x")
+        self.assertEqual(cfg.mappings["kp"]["esc"].also_match, [])

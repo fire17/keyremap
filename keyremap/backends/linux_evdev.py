@@ -114,10 +114,15 @@ def run(cfg: Config):
                 # numpad twin for the same action so a KP7 press still means
                 # "home" — otherwise the key silently does nothing.
                 for src, act in cfg.mappings[logical].items():
+                    names = []
                     twin = NUMPAD_TWIN.get(KEYS[src].ev)
-                    code = getattr(ecodes, twin, None) if twin else None
-                    if code is not None:
-                        table.setdefault(code, act)
+                    if twin:
+                        names.append(twin)
+                    names += [KEYS[a].ev for a in act.also_match]
+                    for nm in names:
+                        code = getattr(ecodes, nm, None)
+                        if code is not None:
+                            table.setdefault(code, act)
                 if cfg.swallow_numlock_quirk:
                     table.setdefault(ecodes.KEY_NUMLOCK, None)  # None = swallow
                 d.grab()

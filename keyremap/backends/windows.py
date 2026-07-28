@@ -191,6 +191,11 @@ def generate_interception(cfg: Config) -> str:
             sc = k.sc | (0x100 if k.ext else 0)  # AHI marks E0-extended with 0x100
             fn = f"On_{dev}_{src}"
             out.append(f'AHI.SubscribeKey({var}, 0x{sc:X}, true, {fn})')
+            for alt in act.also_match:             # user-declared alternates
+                ak = KEYS[alt]
+                asc = ak.sc | (0x100 if ak.ext else 0)
+                out.append(f'AHI.SubscribeKey({var}, 0x{asc:X}, true, {fn})'
+                           f'  ; also_match {alt}')
             if not act.is_simple:
                 # press -> on key-down; tap -> on release if quick;
                 # hold -> at the hold_ms mark while still held (suppresses tap).

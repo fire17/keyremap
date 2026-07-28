@@ -94,10 +94,15 @@ def generate(cfg: Config) -> str:
                 m["parameters"] = params
             manips.append(m)
 
+            extra = set()
             twin = NUMPAD_TWIN.get(m["from"]["key_code"])
             if twin:
+                extra.add(twin)
+            for name in act.also_match:            # user-declared alternates
+                extra.add(KEYS[name].kb)
+            for code in sorted(extra):
                 alt = json.loads(json.dumps(m))     # same behaviour, other code
-                alt["from"]["key_code"] = twin
+                alt["from"]["key_code"] = code
                 manips.append(alt)
         if cfg.swallow_numlock_quirk:
             # The same firmware quirk Windows needs handled: the keypad toggles

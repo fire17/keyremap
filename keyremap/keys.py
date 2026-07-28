@@ -125,7 +125,33 @@ _add("playpause", 0xB3, 0x22, "Media_Play_Pause", "KEY_PLAYPAUSE", "play_or_paus
 _add("nexttrack", 0xB0, 0x19, "Media_Next",  "KEY_NEXTSONG",     "fastforward", ext=True)
 _add("prevtrack", 0xB1, 0x10, "Media_Prev",  "KEY_PREVIOUSSONG", "rewind", ext=True)
 
+# Karabiner's own spellings are accepted verbatim: a Mac user reads a key code
+# out of Karabiner's EventViewer and should be able to paste it straight into
+# the config without translating it first.
+KARABINER_ALIASES = {
+    "delete_or_backspace": "backspace", "delete_forward": "delete",
+    "return_or_enter": "enter", "spacebar": "space",
+    "page_up": "pageup", "page_down": "pagedown",
+    "up_arrow": "up", "down_arrow": "down",
+    "left_arrow": "left", "right_arrow": "right",
+    "equal_sign": "equal", "hyphen": "minus",
+    "open_bracket": "lbracket", "close_bracket": "rbracket",
+    "grave_accent_and_tilde": "grave", "period": "dot",
+    "keypad_num_lock": "numlock", "keypad_period": "kpdot",
+    "keypad_enter": "kpenter", "keypad_plus": "kpplus",
+    "keypad_hyphen": "kpminus", "keypad_asterisk": "kpmul",
+    "keypad_slash": "kpdiv", "keypad_equal_sign": "kpequal",
+    "left_control": "lctrl", "right_control": "rctrl",
+    "left_shift": "lshift", "right_shift": "rshift",
+    "left_option": "lalt", "right_option": "ralt",
+    "left_command": "lwin", "right_command": "rwin",
+    "application": "menu", "print_screen": "printscreen",
+    "scroll_lock": "scrolllock", "caps_lock": "capslock",
+    **{f"keypad_{n}": f"kp{n}" for n in range(10)},
+}
+
 ALIASES = {
+    **KARABINER_ALIASES,
     "escape": "esc", "return": "enter", "win": "lwin", "cmd": "lwin",
     "super": "lwin", "meta": "lwin", "pgup": "pageup", "pgdn": "pagedown",
     "del": "delete", "ins": "insert", "bs": "backspace", "caps": "capslock",

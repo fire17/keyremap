@@ -3,6 +3,7 @@
 <img src="assets/banner.svg" width="100%" alt="keyremap — one keyboard, remapped. Every computer, the same.">
 
 [![ci](https://github.com/fire17/keyremap/actions/workflows/ci.yml/badge.svg)](https://github.com/fire17/keyremap/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/fire17/keyremap?color=c3a6ff)](https://github.com/fire17/keyremap/releases/latest)
 [![tests](https://img.shields.io/badge/tests-87%20passing-5ddba4)](tests/test_keyremap.py)
 [![dependencies](https://img.shields.io/badge/dependencies-none-5ddba4)](#-quickstart)
 [![platforms](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-verified%20in%20CI-5cc8ff)](.github/workflows/ci.yml)

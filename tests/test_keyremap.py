@@ -1356,3 +1356,61 @@ class TestAlsoMatch(unittest.TestCase):
     def test_absent_by_default(self):
         cfg = cfgmod.load(write_cfg(BASE_DOC), plat="linux", host="x")
         self.assertEqual(cfg.mappings["kp"]["esc"].also_match, [])
+
+
+class TestNoRegressionAgainstDeployed(unittest.TestCase):
+    """A refactor must never silently change what a working install does.
+
+    These are the exact subscriptions, sends and timers of the script running
+    on the author's machine today, transcribed from it. If a change to the
+    generator alters any of them, this fails and says so plainly.
+    """
+
+    EXPECTED_SUBSCRIPTIONS = {
+        "0xE",    # clear   -> End
+        "0xD",    # =       -> PageDown
+        "0xF",    # tab     -> PageUp
+        "0x1",    # esc     -> Home
+        "0x153",  # del     -> Backspace
+        "0x152",  # ins     -> Delete
+        "0x151",  # PgDn    -> Ctrl (held)
+        "0x149",  # PgUp    -> Shift (held)
+        "0x14F",  # End     -> paste
+        "0x147",  # Home    -> select all / +copy on hold
+    }
+    EXPECTED_SENDS = {
+        '{End}', '{PgDn}', '{PgUp}', '{Home}', '{Backspace}', '{Delete}',
+        '{LCtrl Down}', '{LCtrl Up}', '{LShift Down}', '{LShift Up}',
+        '^{v}', '^{a}', '^{c}',
+    }
+
+    def setUp(self):
+        import re
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        cfg = cfgmod.load(os.path.join(here, "config.yaml"),
+                          plat="windows", host="deployed")
+        self.script = win.generate_interception(cfg)
+        self.re = re
+
+    def test_exact_same_scancodes_are_subscribed(self):
+        got = set(self.re.findall(r"SubscribeKey\(id_keypad, (0x[0-9A-F]+)",
+                                  self.script))
+        self.assertEqual(got, self.EXPECTED_SUBSCRIPTIONS,
+                         "the set of intercepted keys changed")
+
+    def test_exact_same_keystrokes_are_emitted(self):
+        got = set(self.re.findall(r'Send "([^"]*)"', self.script))
+        # drop passthrough sends and concatenation fragments such as
+        # Send "{" m " Up}" in the stuck-modifier watchdog
+        got = {g for g in got
+               if not g.startswith("{Blind}") and len(g) > 2}
+        self.assertEqual(got, self.EXPECTED_SENDS,
+                         "the keystrokes produced changed")
+
+    def test_hold_threshold_is_still_400ms(self):
+        self.assertIn("SetTimer(Hold_keypad_home, -400)", self.script)
+
+    def test_modifiers_are_still_held_not_tapped(self):
+        for mod in ("LCtrl", "LShift"):
+            self.assertIn(f"{{{mod} Down}}", self.script)
+            self.assertIn(f"{{{mod} Up}}", self.script)

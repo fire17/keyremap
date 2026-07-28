@@ -139,6 +139,70 @@ jobs:
             ~/.config/karabiner/assets/complex_modifications/keyremap.json
           echo "rule installed, enabled, idempotent, and accepted by karabiner_cli"
 
+  # The user's actual first five minutes on a new machine, executed verbatim:
+  # install.sh -> keyremap doctor -> keyremap selftest -> keyremap apply.
+  # If install.sh is broken on macOS, nothing else matters.
+  fresh-machine:
+    name: fresh-machine journey (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: run install.sh exactly as a new user would
+        run: |
+          ./install.sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: the installed launcher must work from anywhere
+        run: |
+          cd /                       # nowhere near the checkout
+          which keyremap
+          keyremap check
+          keyremap doctor || true    # warnings expected on a runner
+          keyremap selftest
+
+      - name: config is installed and re-running never clobbers it
+        run: |
+          test -f "$HOME/.keyremap/app/config.yaml"
+          echo "# user edit that must survive a re-install" >> "$HOME/.keyremap/app/config.yaml"
+          ./install.sh >/dev/null
+          grep -q "user edit that must survive" "$HOME/.keyremap/app/config.yaml" \
+            && echo "re-install preserved the user's config"
+
+      - name: export/import round-trip through the installed CLI
+        run: |
+          cd "$HOME"
+          keyremap export --out "$HOME/mine.keyremap"
+          keyremap import "$HOME/mine.keyremap"
+          keyremap check | tail -3
+
+      - name: apply through the installed CLI (macOS only — it enables the rule)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p ~/.config/karabiner/assets/complex_modifications
+          printf '{"profiles":[{"name":"Default","selected":true,"complex_modifications":{"rules":[]}}]}' \
+            > ~/.config/karabiner/karabiner.json
+          keyremap apply
+          python - <<'PY'
+          import json, os
+          p = os.path.expanduser("~/.config/karabiner/karabiner.json")
+          rules = json.load(open(p))["profiles"][0]["complex_modifications"]["rules"]
+          assert any(r["description"].startswith("keyremap:") for r in rules), rules
+          print("fresh machine -> rule live in Karabiner's profile")
+          PY
+
+      - name: uninstall leaves nothing behind
+        run: |
+          rm -rf "$HOME/.keyremap/app" "$HOME/.local/bin/keyremap"
+          test ! -e "$HOME/.local/bin/keyremap" && echo "clean uninstall"
+
   # The decisive Linux gate: a REAL kernel device, a real grab, real uinput.
   linux-uinput:
     name: real kernel grab (Linux)

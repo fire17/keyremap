@@ -4,11 +4,13 @@
 
 [![ci](https://github.com/fire17/keyremap/actions/workflows/ci.yml/badge.svg)](https://github.com/fire17/keyremap/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/fire17/keyremap?color=c3a6ff)](https://github.com/fire17/keyremap/releases/latest)
-[![tests](https://img.shields.io/badge/tests-126%20passing-5ddba4)](tests/test_keyremap.py)
+[![tests](https://img.shields.io/badge/tests-131%20passing-5ddba4)](tests/test_keyremap.py)
 [![dependencies](https://img.shields.io/badge/dependencies-none-5ddba4)](#-quickstart)
 [![platforms](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-verified%20in%20CI-5cc8ff)](.github/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![stars](https://img.shields.io/github/stars/fire17/keyremap?style=social)](https://github.com/fire17/keyremap/stargazers)
+
+<img src="assets/demo.svg" width="100%" alt="keyremap's terminal UI cycling through Dashboard, Mappings, Doctor and Apply">
 
 *Your keypad should mean the same thing on every machine you carry it to.*
 
@@ -214,7 +216,9 @@ a script that does nothing.
 ## 🖥️ The control room (TUI)
 
 `keyremap` with no arguments. Five panes, one keystroke apart, hot-reloading the config the moment
-you save it, and idling at ~0% CPU because the loop blocks in `select()`.
+you save it, and idling at ~0% CPU because the loop blocks in `select()`. The animation at the
+top of this page is generated from the real renderer (`tools/make_demo.py`), so it cannot drift
+from what the app actually draws.
 
 ```
  1 Dashboard  2 Mappings  3 Capture  4 Doctor  5 Apply ──────────────────────────

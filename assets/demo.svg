@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 819 484" width="819" height="484" role="img" aria-label="keyremap terminal UI: dashboard, mappings, doctor, apply">
+<defs><style>text{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;white-space:pre}</style></defs>
+<rect width="819" height="484" rx="10" fill="#0e1016"/>
+<circle cx="26" cy="20" r="5" fill="#ff5f57"/><circle cx="44" cy="20" r="5" fill="#febc2e"/><circle cx="62" cy="20" r="5" fill="#28c840"/>
+<g opacity="0">
+<animate attributeName="opacity" values="1;0;0;0;1" keyTimes="0.000;0.250;0.500;0.750;1" dur="12s" repeatCount="indefinite" calcMode="discrete"/>
+<text x="16" y="42" fill="#5cc8ff">keyremap · per-device key mapping                              darwin · your-mac</text>
+<text x="16" y="59" fill="#5cc8ff"> 1 Dashboard  2 Mappings  3 Capture  4 Doctor  5 Apply ─────────────────────────</text>
+<text x="16" y="93" fill="#e6e9f0">  Device</text>
+<text x="16" y="110" fill="#8b93a7">  configured        keypad</text>
+<text x="16" y="127" fill="#c3a6ff">  fingerprint       keypad → usb:045e:0040</text>
+<text x="16" y="144" fill="#5ddba4">  present           Bluetooth Keypad</text>
+<text x="16" y="178" fill="#e6e9f0">  Engine</text>
+<text x="16" y="195" fill="#8b93a7">  backend           darwin</text>
+<text x="16" y="212" fill="#5ddba4">  running           Karabiner-Elements active</text>
+<text x="16" y="229" fill="#8b93a7">  last applied      2m ago  (10 mappings)</text>
+<text x="16" y="263" fill="#e6e9f0">  Profile layers</text>
+<text x="16" y="280" fill="#5ddba4">    ● base</text>
+<text x="16" y="297" fill="#8b93a7">    ○ os:darwin  (not this machine)</text>
+<text x="16" y="314" fill="#8b93a7">    ○ os:linux  (not this machine)</text>
+<text x="16" y="331" fill="#8b93a7">    ○ os:windows  (not this machine)</text>
+<text x="16" y="365" fill="#5cc8ff">  effective         10 mappings</text>
+<text x="16" y="399" fill="#8b93a7">1-5 switch · ↑↓ move · r reload · a apply · q quit                   config.yaml</text>
+</g>
+<g opacity="0">
+<animate attributeName="opacity" values="0;1;0;0;0" keyTimes="0.000;0.250;0.500;0.750;1" dur="12s" repeatCount="indefinite" calcMode="discrete"/>
+<text x="16" y="42" fill="#5cc8ff">keyremap · per-device key mapping                              darwin · your-mac</text>
+<text x="16" y="59" fill="#5cc8ff"> 1 Dashboard  2 Mappings  3 Capture  4 Doctor  5 Apply ─────────────────────────</text>
+<text x="16" y="93" fill="#8b93a7">    KEY         DOES                              LAYER         SCANCODE</text>
+<text x="16" y="110" fill="#5cc8ff">  ▸ backspace   end                               base          0xE</text>
+<text x="16" y="127" fill="#c3a6ff">    equal       pagedown                          base          0xD</text>
+<text x="16" y="144" fill="#c3a6ff">    tab         pageup                            base          0xF</text>
+<text x="16" y="161" fill="#c3a6ff">    esc         home                              base          0x1</text>
+<text x="16" y="178" fill="#c3a6ff">    delete      backspace                         base          0x153</text>
+<text x="16" y="195" fill="#c3a6ff">    insert      delete                            base          0x152</text>
+<text x="16" y="212" fill="#c3a6ff">    pagedown    lctrl                             base          0x151</text>
+<text x="16" y="229" fill="#c3a6ff">    pageup      lshift                            base          0x149</text>
+<text x="16" y="246" fill="#c3a6ff">    end         accel+v                           base          0x14F</text>
+<text x="16" y="263" fill="#c3a6ff">    home        tap:accel+a  hold 400ms:accel+a … base          0x147</text>
+<text x="16" y="297" fill="#8b93a7">  ↑↓ select · c capture a new code for this key</text>
+<text x="16" y="399" fill="#8b93a7">1-5 switch · ↑↓ move · r reload · a apply · q quit                   config.yaml</text>
+</g>
+<g opacity="0">
+<animate attributeName="opacity" values="0;0;1;0;0" keyTimes="0.000;0.250;0.500;0.750;1" dur="12s" repeatCount="indefinite" calcMode="discrete"/>
+<text x="16" y="42" fill="#5cc8ff">keyremap · per-device key mapping                              darwin · your-mac</text>
+<text x="16" y="59" fill="#5cc8ff"> 1 Dashboard  2 Mappings  3 Capture  4 Doctor  5 Apply ─────────────────────────</text>
+<text x="16" y="93" fill="#8b93a7">  Doctor  what this machine needs</text>
+<text x="16" y="127" fill="#5ddba4">  ✓ Python &gt;= 3.10            3.12.7</text>
+<text x="16" y="144" fill="#5ddba4">  ✓ Karabiner-Elements        installed</text>
+<text x="16" y="161" fill="#5ddba4">  ✓ Karabiner driver extensionactivated</text>
+<text x="16" y="178" fill="#5ddba4">  ✓ karabiner_cli lint        ok</text>
+<text x="16" y="195" fill="#5ddba4">  ✓ configured device         Bluetooth Keypad</text>
+<text x="16" y="399" fill="#8b93a7">1-5 switch · ↑↓ move · r reload · a apply · q quit                   config.yaml</text>
+</g>
+<g opacity="0">
+<animate attributeName="opacity" values="0;0;0;1;0" keyTimes="0.000;0.250;0.500;0.750;1" dur="12s" repeatCount="indefinite" calcMode="discrete"/>
+<text x="16" y="42" fill="#5cc8ff">keyremap · per-device key mapping                              darwin · your-mac</text>
+<text x="16" y="59" fill="#5cc8ff"> 1 Dashboard  2 Mappings  3 Capture  4 Doctor  5 Apply ─────────────────────────</text>
+<text x="16" y="93" fill="#8b93a7">  Apply  generate + deploy for darwin</text>
+<text x="16" y="127" fill="#5ddba4">  ✓ wrote ~/.config/karabiner/assets/complex_modifications/keyremap.json</text>
+<text x="16" y="144" fill="#8b93a7">  10 mappings · enabled in profile 'Default'</text>
+<text x="16" y="399" fill="#8b93a7">1-5 switch · ↑↓ move · r reload · a apply · q quit                   config.yaml</text>
+</g>
+</svg>

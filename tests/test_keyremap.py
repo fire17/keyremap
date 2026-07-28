@@ -1501,3 +1501,40 @@ class TestServiceRobustness(unittest.TestCase):
             envinfo.detect, subprocess.run = real_env, real_run
         self.assertIn("Karabiner engine", buf.getvalue())
         self.assertIsInstance(code, int)
+
+
+class TestDemoAsset(unittest.TestCase):
+    """The demo ships in a public README — it must render everywhere and
+    carry nothing personal."""
+
+    def setUp(self):
+        self.root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(self.root, "assets", "demo.svg"),
+                  encoding="utf-8") as f:
+            self.svg = f.read()
+
+    def test_is_valid_xml(self):
+        import xml.etree.ElementTree as ET
+        ET.fromstring(self.svg)
+
+    def test_is_csp_safe(self):
+        """GitHub strips scripts and external refs from SVG."""
+        self.assertNotIn("<script", self.svg)
+        self.assertNotIn("@font-face", self.svg)
+        body = self.svg.replace("http://www.w3.org/2000/svg", "")
+        self.assertNotIn("http", body)
+
+    def test_carries_no_personal_data(self):
+        import getpass
+        for leak in ("TamiBar", "/home/", "C:\\Users", getpass.getuser()):
+            if len(leak) > 2:
+                self.assertNotIn(leak, self.svg, f"demo leaks {leak!r}")
+
+    def test_shows_the_real_ui(self):
+        for expected in ("Dashboard", "Mappings", "Doctor", "Apply",
+                         "SCANCODE", "keyremap"):
+            self.assertIn(expected, self.svg)
+
+    def test_animates_without_javascript(self):
+        self.assertIn("<animate", self.svg)
+        self.assertIn('repeatCount="indefinite"', self.svg)

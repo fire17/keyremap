@@ -58,6 +58,27 @@ def _checks_macos(cfg):
     ok3 = shutil.which("hidutil") is not None
     out.append((OK if ok3 else WARN, "hidutil (device listing)",
                 "present" if ok3 else "missing", ""))
+
+    # The decisive check: hand our generated rule to Karabiner's own linter.
+    from .backends import macos as mac
+    cli = mac.find_karabiner_cli()
+    if not cli:
+        out.append((WARN, "karabiner_cli lint", "karabiner_cli not found",
+                    "install Karabiner-Elements to enable the real linter"))
+    else:
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", suffix=".json",
+                                         delete=False) as f:
+            f.write(mac.generate(cfg))
+            tmp = f.name
+        try:
+            ok4, detail = mac.lint_with_karabiner(tmp)
+            out.append((OK if ok4 else FAIL, "karabiner_cli lint",
+                        detail[:70] if detail else "no output",
+                        "" if ok4 else "the generated rule was rejected — "
+                                       "please report this output"))
+        finally:
+            os.unlink(tmp)
     return out
 
 

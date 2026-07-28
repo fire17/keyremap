@@ -5,6 +5,8 @@ backend is used via interop). Requires: pip install evdev, and read access to
 /dev/input (root or an 'input'-group udev rule) plus /dev/uinput.
 """
 
+import time
+
 from ..config import Config
 from ..engine import Engine, HOLD_DOWN, HOLD_UP, PASS, TAP
 from ..keys import KEYS, EV_MOD_NAME

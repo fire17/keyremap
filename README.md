@@ -214,8 +214,20 @@ project: an invented Karabiner `key_code`, a manipulator with **no `device_if`**
 would silently remap every keyboard on the Mac), an AHK `Map.Delete` on a state map, and
 `GetKeyboardId()` on a Bluetooth device.
 
+Two more nets catch what pure logic tests cannot:
+
+- **Karabiner's own vocabulary is vendored** (`keyremap/data/karabiner_key_codes.json`,
+  from upstream Karabiner-Elements) and every emittable `key_code` is checked against it —
+  so an invented code is impossible, not merely unlikely. On a Mac, `doctor` and
+  `selftest` additionally run **`karabiner_cli --lint-complex-modifications`**, Karabiner's
+  real linter, and report "not run" rather than a pass when it is unavailable.
+- **The Linux run-loop is exercised against a fake kernel** — stub evdev/uinput, real
+  code path: device matching, grab, the select loop, hold deadlines, uinput writes. That
+  test immediately caught a missing `import time` that would have crashed the daemon on
+  its first iteration.
+
 ```sh
-python3 -m unittest discover -s tests -v     # 59 tests, ~0.07s
+python3 -m unittest discover -s tests -v     # 70 tests, ~0.05s
 ```
 
 Layout: `keys.py` (one canonical key table → Windows/evdev/Karabiner names), `config.py`
@@ -230,8 +242,8 @@ Layout: `keys.py` (one canonical key table → Windows/evdev/Karabiner names), `
 | Native GUI (tkinter) | **verified running** on Windows with live device detection |
 | Browser GUI | **verified running** (served and loaded from another OS's browser) |
 | CLI on native Windows Python | **verified** — 64 tests + selftest green, no pyyaml installed |
-| macOS (Karabiner) | artifact generated and strictly validated; **not yet loaded by a real Karabiner** |
-| Linux (evdev) | engine tested exhaustively; **kernel grab not yet run on real hardware** |
+| macOS (Karabiner) | every emitted `key_code` checked against **Karabiner's own upstream vocabulary**; `karabiner_cli --lint` runs automatically on a Mac. **Not yet loaded by a running Karabiner** |
+| Linux (evdev) | run-loop driven end-to-end against a **fake kernel** (grab, select, hold deadlines, uinput output). **Real kernel grab not yet run** |
 
 Run `keyremap selftest` on a new machine and it will tell you which of these apply to you.
 

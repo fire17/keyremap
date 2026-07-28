@@ -118,6 +118,29 @@ def run(cfg, verbose: bool = True) -> int:
     sections.append(("export/import round-trip", _roundtrip_checks(cfg),
                      "same behaviour after moving machines"))
 
+    # On a Mac, stop guessing: hand the rule to Karabiner's own linter.
+    from . import envinfo
+    karabiner_note = None
+    if envinfo.detect() == "macos":
+        import os
+        import tempfile
+        from .backends import macos as mac
+        if mac.find_karabiner_cli():
+            with tempfile.NamedTemporaryFile("w", suffix=".json",
+                                             delete=False) as f:
+                f.write(mac.generate(cfg))
+                tmp = f.name
+            try:
+                ok_lint, detail = mac.lint_with_karabiner(tmp)
+                sections.append(("karabiner_cli lint",
+                                 [] if ok_lint else [detail],
+                                 "validated by Karabiner itself"))
+            finally:
+                os.unlink(tmp)
+        else:
+            karabiner_note = ("karabiner_cli not installed — the real linter "
+                              "did NOT run")
+
     ok = True
     if verbose:
         print("keyremap selftest\n")
@@ -150,6 +173,8 @@ def run(cfg, verbose: bool = True) -> int:
                   "before 'keyremap apply' will work here.")
         else:
             print("  FAILURES above — do not apply until they are fixed.")
+        if karabiner_note:
+            print(f"  ! {karabiner_note}")
         print("\n  Note: a real Karabiner load and a real kernel grab can only be\n"
               "  verified on the target OS; everything else is checked above.")
     return 0 if ok else 1

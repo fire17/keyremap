@@ -577,3 +577,161 @@ class TestImportFormat(unittest.TestCase):
             dest = portable.import_bundle(b, d, filename="config.json")
             self.assertTrue(dest.endswith(".json"))
             json.load(open(dest))  # must be valid JSON
+
+
+class TestAgainstUpstreamKarabiner(unittest.TestCase):
+    """Guard the Mac path against Karabiner's OWN key-code vocabulary."""
+
+    def test_every_emittable_key_code_exists_upstream(self):
+        from keyremap.validate import upstream_key_codes
+        upstream = upstream_key_codes()
+        self.assertGreater(len(upstream), 150, "vendored list looks truncated")
+        emitted = {k.kb for k in KEYS.values()}
+        self.assertEqual(sorted(emitted - upstream), [],
+                         "we can emit a key_code Karabiner does not define")
+
+    def test_generated_rule_uses_only_upstream_codes(self):
+        from keyremap.validate import upstream_key_codes
+        upstream = upstream_key_codes()
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        cfg = cfgmod.load(os.path.join(here, "config.yaml"),
+                          plat="darwin", host="mac")
+        doc = json.loads(mac.generate(cfg))
+        used = set()
+        for rule in doc["rules"]:
+            for m in rule["manipulators"]:
+                used.add(m["from"]["key_code"])
+                for f in ("to", "to_if_alone", "to_if_held_down"):
+                    for t in m.get(f, []):
+                        used.add(t["key_code"])
+        self.assertEqual(sorted(used - upstream), [])
+
+    def test_device_if_uses_decimal_integers(self):
+        """Karabiner requires decimal ints for vendor_id/product_id."""
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        cfg = cfgmod.load(os.path.join(here, "config.yaml"),
+                          plat="darwin", host="mac")
+        doc = json.loads(mac.generate(cfg))
+        for rule in doc["rules"]:
+            for m in rule["manipulators"]:
+                ident = m["conditions"][0]["identifiers"][0]
+                self.assertIsInstance(ident["vendor_id"], int)
+                self.assertIsInstance(ident["product_id"], int)
+                self.assertEqual(ident["vendor_id"], 0x045E)
+
+
+class TestLinuxBackendEndToEnd(unittest.TestCase):
+    """Drive the real Linux run-loop with a fake kernel.
+
+    WSL has no /dev/input, so instead of leaving the backend untested we
+    substitute evdev/uinput with stubs and assert the exact events it writes.
+    This exercises device matching, grab, the select loop, hold deadlines and
+    uinput output — everything except the kernel itself.
+    """
+
+    def _stub_evdev(self, events):
+        import types
+
+        ec = types.SimpleNamespace()
+        names = ["KEY_ESC", "KEY_HOME", "KEY_END", "KEY_A", "KEY_C",
+                 "KEY_LEFTCTRL", "KEY_LEFTSHIFT", "KEY_PAGEUP", "KEY_PAGEDOWN",
+                 "KEY_TAB", "KEY_BACKSPACE", "KEY_DELETE", "KEY_INSERT",
+                 "KEY_EQUAL", "KEY_NUMLOCK"]
+        for i, n in enumerate(names, start=1):
+            setattr(ec, n, 100 + i)
+        ec.EV_KEY = 1
+        ec.EV_SYN = 0
+
+        class Ev:
+            def __init__(self, code, value):
+                self.type, self.code, self.value = ec.EV_KEY, code, value
+
+        written = []
+
+        class UInput:
+            def write(self, typ, code, val):
+                written.append(("write", code, val))
+
+            def write_event(self, ev):
+                written.append(("pass", ev.code, ev.value))
+
+            def syn(self):
+                pass
+
+            def close(self):
+                pass
+
+        class InputDevice:
+            def __init__(self, path):
+                self.path, self.fd, self.name = path, 7, "Bluetooth Keypad"
+                self.info = types.SimpleNamespace(vendor=0x045E, product=0x0040)
+                self._queue = list(events)
+
+            def capabilities(self):
+                return {ec.EV_KEY: []}
+
+            def grab(self):
+                written.append(("grab", 0, 0))
+
+            def ungrab(self):
+                pass
+
+            def read(self):
+                if not self._queue:
+                    raise KeyboardInterrupt   # ends the loop deterministically
+                code, value = self._queue.pop(0)
+                return [Ev(code, value)]
+
+        mod = types.ModuleType("evdev")
+        mod.ecodes = ec
+        mod.InputDevice = InputDevice
+        mod.UInput = UInput
+        mod.list_devices = lambda: ["/dev/input/event0"]
+        return mod, ec, written
+
+    def _run(self, mapping, events):
+        import select as real_select
+        import sys as _sys
+        doc = json.loads(json.dumps(BASE_DOC))
+        doc["devices"] = {"kp": {"match": {"vendor_id": "0x045E",
+                                           "product_id": "0x0040"}}}
+        doc["profiles"] = {"base": {"kp": mapping}}
+        cfg = cfgmod.load(write_cfg(doc), plat="linux", host="x")
+
+        mod, ec, written = self._stub_evdev(events)
+        from keyremap.backends import linux_evdev as be
+        saved_mod = _sys.modules.get("evdev")
+        saved_sel = real_select.select
+        _sys.modules["evdev"] = mod
+        real_select.select = lambda r, w, x, t=None: (list(r), [], [])
+        try:
+            try:
+                be.run(cfg)
+            except KeyboardInterrupt:
+                pass
+        finally:
+            real_select.select = saved_sel
+            if saved_mod is None:
+                _sys.modules.pop("evdev", None)
+            else:
+                _sys.modules["evdev"] = saved_mod
+        return written, ec
+
+    def test_device_is_grabbed_and_simple_remap_emits(self):
+        # 101 = KEY_ESC, 102 = KEY_HOME in the stub's numbering
+        written, _ = self._run({"esc": "home"}, [(101, 1), (101, 0)])
+        self.assertIn(("grab", 0, 0), written)
+        writes = [(c, v) for k, c, v in written if k == "write"]
+        self.assertIn((102, 1), writes)   # HOME pressed
+        self.assertIn((102, 0), writes)   # HOME released
+
+    def test_modifier_key_is_held_for_its_duration(self):
+        written, _ = self._run({"pagedown": "lctrl"},
+                               [(109, 1), (109, 0)])   # KEY_PAGEDOWN
+        writes = [(c, v) for k, c, v in written if k == "write"]
+        self.assertIn((106, 1), writes)   # KEY_LEFTCTRL down
+        self.assertIn((106, 0), writes)   # KEY_LEFTCTRL up
+
+    def test_unmapped_key_passes_through_untouched(self):
+        written, _ = self._run({"esc": "home"}, [(110, 1)])  # KEY_TAB unmapped
+        self.assertIn(("pass", 110, 1), written)

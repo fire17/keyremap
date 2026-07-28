@@ -40,6 +40,22 @@ KARABINER_MODIFIERS = {
 }
 
 
+def upstream_key_codes() -> set[str]:
+    """Karabiner's own key_code vocabulary, vendored from upstream.
+
+    Falls back to the transcribed set if the data file is missing, so a
+    partial install degrades instead of failing.
+    """
+    import os
+    p = os.path.join(os.path.dirname(__file__), "data",
+                     "karabiner_key_codes.json")
+    try:
+        with open(p) as f:
+            return set(json.load(f)["key_codes"])
+    except (OSError, KeyError, ValueError):
+        return KARABINER_KEYS
+
+
 def validate_karabiner(doc_text: str) -> list[str]:
     """Return a list of problems. Empty == the document is structurally sound."""
     problems = []
@@ -48,6 +64,7 @@ def validate_karabiner(doc_text: str) -> list[str]:
     except json.JSONDecodeError as e:
         return [f"not valid JSON: {e}"]
 
+    valid_keys = upstream_key_codes() | KARABINER_KEYS
     if not isinstance(doc.get("title"), str) or not doc["title"]:
         problems.append("missing 'title' (Karabiner shows it in the rule list)")
     rules = doc.get("rules")
@@ -70,7 +87,7 @@ def validate_karabiner(doc_text: str) -> list[str]:
             kc = frm.get("key_code")
             if not kc:
                 problems.append(f"{w}: 'from' needs a key_code")
-            elif kc not in KARABINER_KEYS:
+            elif kc not in valid_keys:
                 problems.append(f"{w}: unknown from.key_code {kc!r}")
 
             outs = []
@@ -84,7 +101,7 @@ def validate_karabiner(doc_text: str) -> list[str]:
                         tk = t.get("key_code")
                         if not tk:
                             problems.append(f"{w}.{field}: entry needs key_code")
-                        elif tk not in KARABINER_KEYS:
+                        elif tk not in valid_keys:
                             problems.append(f"{w}.{field}: unknown key_code {tk!r}")
                         for mod in t.get("modifiers", []):
                             if mod not in KARABINER_MODIFIERS:

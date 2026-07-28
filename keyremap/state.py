@@ -37,7 +37,7 @@ class Deployment:
 
 def load_state() -> Deployment:
     try:
-        with open(STATE_FILE) as f:
+        with open(STATE_FILE, encoding="utf-8") as f:
             return Deployment(**json.load(f))
     except (OSError, TypeError, ValueError):
         return Deployment()
@@ -46,7 +46,7 @@ def load_state() -> Deployment:
 def save_state(dep: Deployment) -> None:
     os.makedirs(STATE_DIR, exist_ok=True)
     tmp = STATE_FILE + ".tmp"
-    with open(tmp, "w") as f:
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(asdict(dep), f, indent=2)
     os.replace(tmp, STATE_FILE)  # atomic
 

@@ -38,13 +38,13 @@ def export_bundle(cfg, out_path: str | None = None) -> str:
     }
     out_path = out_path or os.path.join(
         os.path.dirname(cfg.path), f"keyremap-{host}.keyremap")
-    with open(out_path, "w") as f:
+    with open(out_path, "w", encoding="utf-8") as f:
         json.dump(bundle, f, indent=2)
     return out_path
 
 
 def read_bundle(path: str) -> dict:
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         data = json.load(f)
     if data.get("magic") != MAGIC:
         raise ValueError(f"{path} is not a keyremap bundle")
@@ -80,7 +80,7 @@ def import_bundle(path: str, dest_dir: str, filename: str = "config.yaml") -> st
     header = (f"# imported from {data['exported_from']['host']} "
               f"({data['exported_from']['platform']}) "
               f"on {data['exported_at']}\n")
-    with open(dest, "w") as f:
+    with open(dest, "w", encoding="utf-8") as f:
         if not want_json:
             f.write(header)   # JSON has no comments
         f.write(text)

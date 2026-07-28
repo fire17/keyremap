@@ -313,6 +313,6 @@ def apply(cfg: Config, out_dir: str, mode: str = "interception",
     path = os.path.join(out_dir, f"keyremap_{mode}.ahk")
     if not dry_run:
         os.makedirs(out_dir, exist_ok=True)
-        with open(path, "w", newline="\r\n") as f:
+        with open(path, "w", newline="\r\n", encoding="utf-8") as f:
             f.write(text)
     return path if not dry_run else text

@@ -50,7 +50,7 @@ def upstream_key_codes() -> set[str]:
     p = os.path.join(os.path.dirname(__file__), "data",
                      "karabiner_key_codes.json")
     try:
-        with open(p) as f:
+        with open(p, encoding="utf-8") as f:
             return set(json.load(f)["key_codes"])
     except (OSError, KeyError, ValueError):
         return KARABINER_KEYS

@@ -126,7 +126,7 @@ def run(cfg, device: str | None = None, index: int | None = None,
         return 1
     chosen = devs[index]
 
-    with open(cfg.path) as f:
+    with open(cfg.path, encoding="utf-8") as f:
         text = f.read()
     new_text, ok = rewrite_ids(text, target_name, chosen["vid"], chosen["pid"])
     if not ok:
@@ -139,9 +139,9 @@ def run(cfg, device: str | None = None, index: int | None = None,
         return 0
 
     backup = cfg.path + ".before-adopt"
-    with open(backup, "w") as f:
+    with open(backup, "w", encoding="utf-8") as f:
         f.write(text)
-    with open(cfg.path, "w") as f:
+    with open(cfg.path, "w", encoding="utf-8") as f:
         f.write(new_text)
     print(f"\nadopted 0x{chosen['vid']:04X}:0x{chosen['pid']:04X} "
           f"({chosen['name']}) into '{target_name}'")

@@ -140,7 +140,7 @@ def current_env() -> tuple[str, str]:
         sysname, sysname)
     if plat == "linux":
         try:
-            with open("/proc/sys/kernel/osrelease") as f:
+            with open("/proc/sys/kernel/osrelease", encoding="utf-8") as f:
                 if "microsoft" in f.read().lower():
                     plat = "wsl"
         except OSError:
@@ -216,7 +216,7 @@ def resolve_layers(layers: dict[str, dict], plat: str, host: str
 
 
 def load(path: str, plat: str | None = None, host: str | None = None) -> Config:
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         text = f.read()
     raw = parse_text(text, path)
 

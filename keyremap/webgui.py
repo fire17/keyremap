@@ -273,7 +273,7 @@ def serve(cfg_path: str, port: int = 0, open_browser: bool = True):
     url = f"http://127.0.0.1:{httpd.server_port}/"
     print(f"keyremap web UI → {url}   (ctrl-c to stop)")
     if open_browser:
-        threading.Thread(target=lambda: (time.sleep(0.4), webbrowser.open(url)),
+        threading.Thread(target=lambda: (time.sleep(0.4), webbrowser.open(url, encoding="utf-8")),
                          daemon=True).start()
     try:
         httpd.serve_forever()

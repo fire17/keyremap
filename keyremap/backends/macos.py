@@ -132,7 +132,7 @@ def enable_in_profile(cfg: Config, path: str = KARABINER_JSON) -> tuple[bool, st
     if not os.path.exists(path):
         return False, "karabiner.json not found (launch Karabiner-Elements once)"
     try:
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             doc = json.load(f)
     except (OSError, ValueError) as e:
         return False, f"could not read karabiner.json: {e}"
@@ -151,10 +151,10 @@ def enable_in_profile(cfg: Config, path: str = KARABINER_JSON) -> tuple[bool, st
 
     backup = path + ".keyremap-backup"
     if not os.path.exists(backup):
-        with open(backup, "w") as f:
+        with open(backup, "w", encoding="utf-8") as f:
             json.dump(doc, f, indent=4)  # pre-change copy, written once
     tmp = path + ".tmp"
-    with open(tmp, "w") as f:
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(doc, f, indent=4)
     os.replace(tmp, path)   # atomic; Karabiner reloads on write
     return True, (f"enabled {len(ours)} rule(s) in profile "
@@ -173,13 +173,13 @@ def apply(cfg: Config, out_dir: str, dry_run: bool = False,
         return text
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "keyremap.json")
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write(text)
 
     if install and os.path.isdir(os.path.expanduser("~/.config/karabiner")):
         os.makedirs(ASSETS_DIR, exist_ok=True)
         installed = os.path.join(ASSETS_DIR, "keyremap.json")
-        with open(installed, "w") as f:
+        with open(installed, "w", encoding="utf-8") as f:
             f.write(text)
         path = installed
         if enable:

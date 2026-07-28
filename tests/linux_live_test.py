@@ -73,7 +73,7 @@ def daemon(config_path):
 
 def main():
     cfg_path = "/tmp/keyremap-live.json"
-    with open(cfg_path, "w") as f:
+    with open(cfg_path, "w", encoding="utf-8") as f:
         f.write(CONFIG)
 
     before = set(evdev.list_devices())

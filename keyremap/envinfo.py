@@ -15,7 +15,7 @@ def detect() -> str:
     if sysname == "linux":
         # WSL: kernel release mentions microsoft, and Windows interop exists
         try:
-            with open("/proc/sys/kernel/osrelease") as f:
+            with open("/proc/sys/kernel/osrelease", encoding="utf-8") as f:
                 if "microsoft" in f.read().lower() and shutil.which("powershell.exe"):
                     return "wsl"
         except OSError:

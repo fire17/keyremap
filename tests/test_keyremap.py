@@ -22,7 +22,7 @@ from keyremap.tui import term
 
 def write_cfg(doc: dict) -> str:
     fd, path = tempfile.mkstemp(suffix=".json")
-    with os.fdopen(fd, "w") as f:
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump(doc, f)
     return path
 
@@ -265,7 +265,7 @@ class TestPortability(unittest.TestCase):
     def test_rejects_foreign_file(self):
         with tempfile.TemporaryDirectory() as d:
             p = os.path.join(d, "x.json")
-            with open(p, "w") as f:
+            with open(p, "w", encoding="utf-8") as f:
                 json.dump({"hello": "world"}, f)
             with self.assertRaises(ValueError):
                 portable.read_bundle(p)
@@ -275,7 +275,7 @@ class TestPortability(unittest.TestCase):
             cfg = cfgmod.load(write_cfg(BASE_DOC), plat="linux", host="x")
             bundle = portable.export_bundle(cfg, os.path.join(d, "b.keyremap"))
             existing = os.path.join(d, "config.json")
-            with open(existing, "w") as f:
+            with open(existing, "w", encoding="utf-8") as f:
                 f.write("{}")
             portable.import_bundle(bundle, d, filename="config.json")
             backups = [f for f in os.listdir(d) if ".bak-" in f]
@@ -508,7 +508,8 @@ class TestMiniYaml(unittest.TestCase):
             self.skipTest("pyyaml not installed")
         from keyremap import miniyaml
         here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        text = open(os.path.join(here, "config.yaml")).read()
+        text = open(os.path.join(here, "config.yaml"),
+                    encoding="utf-8").read()
         self.assertEqual(miniyaml.safe_load(text), yaml.safe_load(text))
 
     def test_scalars_and_structures(self):
@@ -576,7 +577,7 @@ class TestImportFormat(unittest.TestCase):
             b = portable.export_bundle(cfg, os.path.join(d, "b.keyremap"))
             dest = portable.import_bundle(b, d, filename="config.json")
             self.assertTrue(dest.endswith(".json"))
-            json.load(open(dest))  # must be valid JSON
+            json.load(open(dest, encoding="utf-8"))  # must be valid JSON
 
 
 class TestAgainstUpstreamKarabiner(unittest.TestCase):
@@ -755,10 +756,10 @@ class TestKarabinerAutoEnable(unittest.TestCase):
         cfg = cfgmod.load(write_cfg(BASE_DOC), plat="darwin", host="mac")
         with tempfile.TemporaryDirectory() as d:
             p = os.path.join(d, "karabiner.json")
-            with open(p, "w") as f:
+            with open(p, "w", encoding="utf-8") as f:
                 json.dump(doc, f)
             ok, detail = mac.enable_in_profile(cfg, p)
-            with open(p) as f:
+            with open(p, encoding="utf-8") as f:
                 after = json.load(f)
             backup = os.path.exists(p + ".keyremap-backup")
         return ok, detail, after, backup
@@ -785,11 +786,11 @@ class TestKarabinerAutoEnable(unittest.TestCase):
         cfg = cfgmod.load(write_cfg(BASE_DOC), plat="darwin", host="mac")
         with tempfile.TemporaryDirectory() as d:
             p = os.path.join(d, "karabiner.json")
-            with open(p, "w") as f:
+            with open(p, "w", encoding="utf-8") as f:
                 json.dump(self._profile_doc(), f)
             for _ in range(3):
                 self.assertTrue(mac.enable_in_profile(cfg, p)[0])
-            with open(p) as f:
+            with open(p, encoding="utf-8") as f:
                 after = json.load(f)
         rules = [x for x in [pr for pr in after["profiles"]
                              if pr.get("selected")][0]
@@ -854,7 +855,7 @@ profiles:
         from keyremap.adopt import rewrite_ids
         out, _ = rewrite_ids(self.SAMPLE, "keypad", 0x1234, 0x5678)
         fd, p = tempfile.mkstemp(suffix=".yaml")
-        with os.fdopen(fd, "w") as f:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(out)
         cfg = cfgmod.load(p, plat="darwin", host="mac")
         self.assertEqual(cfg.devices["keypad"].vendor_id, 0x1234)
@@ -874,7 +875,8 @@ class TestInstallManifest(unittest.TestCase):
 
     def setUp(self):
         self.root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        with open(os.path.join(self.root, "install-manifest.txt")) as f:
+        with open(os.path.join(self.root, "install-manifest.txt"),
+                  encoding="utf-8") as f:
             self.listed = {l.strip() for l in f
                            if l.strip() and not l.startswith("#")}
 
@@ -895,7 +897,8 @@ class TestInstallManifest(unittest.TestCase):
         self.assertEqual(gone, [], f"manifest lists files that do not exist: {gone}")
 
     def test_install_script_reads_the_manifest_not_a_hardcoded_list(self):
-        with open(os.path.join(self.root, "install.sh")) as f:
+        with open(os.path.join(self.root, "install.sh"),
+                  encoding="utf-8") as f:
             sh = f.read()
         self.assertIn("install-manifest.txt", sh)
         self.assertNotIn("keyremap/tui/term.py\"", sh)   # the old inline list
@@ -907,7 +910,8 @@ class TestDocsMatchReality(unittest.TestCase):
 
     def setUp(self):
         self.root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        with open(os.path.join(self.root, "README.md")) as f:
+        with open(os.path.join(self.root, "README.md"),
+                  encoding="utf-8") as f:
             self.readme = f.read()
 
     def test_install_urls_are_branch_agnostic(self):
@@ -919,7 +923,8 @@ class TestDocsMatchReality(unittest.TestCase):
     def test_no_placeholder_owner_in_a_url(self):
         """Prose may mention the old bug; a live URL may not contain it."""
         for name in ("README.md", "install.sh"):
-            with open(os.path.join(self.root, name)) as f:
+            with open(os.path.join(self.root, name),
+                      encoding="utf-8") as f:
                 text = f.read()
             self.assertNotIn("githubusercontent.com/OWNER", text,
                              f"{name} has a placeholder in a real URL")
@@ -933,3 +938,49 @@ class TestDocsMatchReality(unittest.TestCase):
         actual = loader.discover(os.path.join(self.root, "tests")).countTestCases()
         self.assertEqual(claimed, actual,
                          f"README claims {claimed} tests, suite has {actual}")
+
+
+class TestEncodingSafety(unittest.TestCase):
+    """Windows defaults to cp1252, so any text file with a non-Latin-1
+    character explodes unless encoding is explicit. This bit CI once."""
+
+    def test_no_text_open_without_explicit_encoding(self):
+        """Parsed with ast, so multi-line calls and strings can't fool it."""
+        import ast
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        offenders = []
+        for base, dirs, names in os.walk(root):
+            dirs[:] = [d for d in dirs
+                       if d not in ("__pycache__", ".git", "out", "assets")]
+            for n in names:
+                if not n.endswith(".py"):
+                    continue
+                p = os.path.join(base, n)
+                with open(p, encoding="utf-8") as f:
+                    tree = ast.parse(f.read(), filename=p)
+                for node in ast.walk(tree):
+                    if not (isinstance(node, ast.Call)
+                            and isinstance(node.func, ast.Name)
+                            and node.func.id == "open"):
+                        continue
+                    kw = {k.arg for k in node.keywords}
+                    mode = ""
+                    if len(node.args) > 1 and isinstance(node.args[1], ast.Constant):
+                        mode = str(node.args[1].value)
+                    if "b" in mode or "encoding" in kw:
+                        continue
+                    offenders.append(f"{os.path.relpath(p, root)}:{node.lineno}")
+        self.assertEqual(sorted(offenders), [],
+                         "text open() without encoding='utf-8' breaks on Windows")
+
+    def test_config_with_non_latin1_characters_loads(self):
+        doc = json.loads(json.dumps(BASE_DOC))
+        fd, p = tempfile.mkstemp(suffix=".yaml")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write("# emoji ✓ and an em-dash — and ⌘\n")
+            f.write("version: 2\n")
+            f.write("devices:\n  kp:\n    match:\n      vendor_id: 0x045E\n"
+                    "      product_id: 0x0040\n")
+            f.write("profiles:\n  base:\n    kp:\n      esc: home\n")
+        cfg = cfgmod.load(p, plat="darwin", host="mac")
+        self.assertEqual(cfg.mappings["kp"]["esc"].press[0][1], "home")

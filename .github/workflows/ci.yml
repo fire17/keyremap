@@ -90,5 +90,6 @@ jobs:
           ls -l /dev/uinput
           sudo chmod 666 /dev/uinput
           python -m pip install --quiet evdev
+          echo "PYBIN=$(which python)" >> "$GITHUB_ENV"
       - name: create a virtual keypad, grab it, and verify remapped output
-        run: sudo -E python tests/linux_live_test.py
+        run: sudo -E "$PYBIN" tests/linux_live_test.py

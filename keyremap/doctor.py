@@ -147,6 +147,9 @@ def run(cfg) -> list[tuple[str, str, str, str]]:
                         matched[0]["name"] if matched else
                         f"not connected ({len(devices)} other input devices)",
                         "" if matched else "connect/pair the device, then re-run"))
+    except ImportError as e:
+        results.append((WARN, "configured device",
+                        "cannot enumerate devices", str(e).split("\n")[0]))
     except Exception as e:  # noqa: BLE001
         results.append((WARN, "configured device",
                         f"detect failed: {type(e).__name__}", ""))

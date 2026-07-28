@@ -12,14 +12,22 @@ from ..engine import Engine, HOLD_DOWN, HOLD_UP, PASS, TAP
 from ..keys import KEYS, EV_MOD_NAME
 
 
+EVDEV_HINT = ("python-evdev is required on Linux: pip install evdev\n"
+              "Also ensure access to /dev/input/event* and /dev/uinput.")
+
+
 def _import_evdev():
+    """Import evdev or raise ImportError.
+
+    Library code must never raise SystemExit: it is a BaseException, so it
+    sails past `except Exception` in callers like doctor/status and kills the
+    whole process instead of being reported as a missing dependency.
+    """
     try:
         import evdev  # noqa
         return evdev
-    except ImportError:
-        raise SystemExit(
-            "python-evdev is required on Linux: pip install evdev\n"
-            "Also ensure access to /dev/input/event* and /dev/uinput.")
+    except ImportError as e:
+        raise ImportError(EVDEV_HINT) from e
 
 
 def _device_ids(dev) -> tuple[int, int, str]:

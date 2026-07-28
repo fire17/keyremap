@@ -214,6 +214,18 @@ project: an invented Karabiner `key_code`, a manipulator with **no `device_if`**
 would silently remap every keyboard on the Mac), an AHK `Map.Delete` on a state map, and
 `GetKeyboardId()` on a Bluetooth device.
 
+**And CI runs it on the real thing.** Every push exercises the suite on real
+macOS, Linux and Windows runners, and two jobs go further:
+
+- **`karabiner lint (real macOS)`** installs Karabiner-Elements on a real Mac and runs
+  **its own** `karabiner_cli --lint-complex-modifications` against the generated rule —
+  then installs it into `~/.config/karabiner/assets/complex_modifications/` and re-lints
+  from there. If `karabiner_cli` is missing the job *fails* rather than quietly passing.
+- **`real kernel grab (Linux)`** modprobes `uinput`, creates a genuine virtual keypad
+  carrying the configured vendor/product id, lets keyremap grab it, injects key events and
+  asserts the remapped events emerge from keyremap's uinput device — simple remap, held
+  modifier, and tap-vs-hold at the threshold. Nothing stubbed.
+
 Two more nets catch what pure logic tests cannot:
 
 - **Karabiner's own vocabulary is vendored** (`keyremap/data/karabiner_key_codes.json`,

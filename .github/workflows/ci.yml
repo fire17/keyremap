@@ -1,0 +1,94 @@
+name: ci
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # Every platform runs the suite and the selftest on real hardware.
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: unit tests
+        run: python -m unittest discover -s tests -v
+      - name: selftest (generates + validates for all platforms)
+        run: python remap.py selftest
+
+  # The decisive macOS gate: hand our generated rule to Karabiner's own linter,
+  # on a real Mac.
+  macos-karabiner:
+    name: karabiner lint (real macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: generate the Karabiner rule
+        run: |
+          python - <<'PY'
+          from keyremap.config import load
+          from keyremap.backends import macos
+          cfg = load("config.yaml", plat="darwin", host="ci")
+          open("keyremap.json", "w").write(macos.generate(cfg))
+          print(open("keyremap.json").read()[:400])
+          PY
+
+      - name: install Karabiner-Elements
+        id: kara
+        continue-on-error: true
+        run: brew install --cask karabiner-elements
+
+      - name: lint with karabiner_cli (the real validator)
+        run: |
+          CLI="/Library/Application Support/org.pqrs/Karabiner-Elements/bin/karabiner_cli"
+          if [ ! -x "$CLI" ]; then
+            CLI="$(command -v karabiner_cli || true)"
+          fi
+          if [ -z "$CLI" ] || [ ! -x "$CLI" ]; then
+            echo "::error::karabiner_cli not found — the real linter did NOT run"
+            exit 1
+          fi
+          echo "using $CLI"
+          "$CLI" --version || true
+          "$CLI" --lint-complex-modifications keyremap.json
+          echo "karabiner_cli accepted the generated rule"
+
+      - name: install into Karabiner's assets dir and re-lint from there
+        run: |
+          mkdir -p ~/.config/karabiner/assets/complex_modifications
+          python remap.py apply
+          ls -l ~/.config/karabiner/assets/complex_modifications/
+          CLI="/Library/Application Support/org.pqrs/Karabiner-Elements/bin/karabiner_cli"
+          "$CLI" --lint-complex-modifications \
+            ~/.config/karabiner/assets/complex_modifications/keyremap.json
+
+  # The decisive Linux gate: a REAL kernel device, a real grab, real uinput.
+  linux-uinput:
+    name: real kernel grab (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: enable uinput and install evdev
+        run: |
+          sudo modprobe uinput
+          ls -l /dev/uinput
+          sudo chmod 666 /dev/uinput
+          python -m pip install --quiet evdev
+      - name: create a virtual keypad, grab it, and verify remapped output
+        run: sudo -E python tests/linux_live_test.py

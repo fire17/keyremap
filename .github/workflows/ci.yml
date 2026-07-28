@@ -69,11 +69,58 @@ jobs:
       - name: install into Karabiner's assets dir and re-lint from there
         run: |
           mkdir -p ~/.config/karabiner/assets/complex_modifications
+          # a realistic karabiner.json with a selected profile and a user rule
+          cat > ~/.config/karabiner/karabiner.json <<'JSON'
+          {
+            "global": {"show_in_menu_bar": true},
+            "profiles": [
+              {"name": "Default", "selected": true,
+               "complex_modifications": {
+                 "rules": [{"description": "a rule the user already had",
+                            "manipulators": []}]}}
+            ]
+          }
+          JSON
           python remap.py apply
           ls -l ~/.config/karabiner/assets/complex_modifications/
           CLI="/Library/Application Support/org.pqrs/Karabiner-Elements/bin/karabiner_cli"
           "$CLI" --lint-complex-modifications \
             ~/.config/karabiner/assets/complex_modifications/keyremap.json
+
+      - name: verify the rule was ENABLED in the selected profile
+        run: |
+          python - <<'PY'
+          import json, os, sys
+          p = os.path.expanduser("~/.config/karabiner/karabiner.json")
+          doc = json.load(open(p))                    # must still be valid JSON
+          prof = [x for x in doc["profiles"] if x.get("selected")][0]
+          rules = prof["complex_modifications"]["rules"]
+          descs = [r.get("description", "") for r in rules]
+          assert any(d.startswith("keyremap:") for d in descs), \
+              f"keyremap rules not enabled: {descs}"
+          assert "a rule the user already had" in descs, \
+              "the user's existing rule was clobbered"
+          assert os.path.exists(p + ".keyremap-backup"), "no backup written"
+          print("enabled in profile:", descs)
+          PY
+          # re-running must not duplicate
+          python remap.py apply >/dev/null
+          python - <<'PY'
+          import json, os
+          p = os.path.expanduser("~/.config/karabiner/karabiner.json")
+          rules = [x for x in json.load(open(p))["profiles"][0]
+                   ["complex_modifications"]["rules"]
+                   if x.get("description", "").startswith("keyremap:")]
+          assert len(rules) == 1, f"re-apply duplicated rules: {len(rules)}"
+          print("idempotent on re-apply: 1 rule")
+          PY
+
+      - name: karabiner_cli must still accept the whole config
+        run: |
+          CLI="/Library/Application Support/org.pqrs/Karabiner-Elements/bin/karabiner_cli"
+          "$CLI" --lint-complex-modifications \
+            ~/.config/karabiner/assets/complex_modifications/keyremap.json
+          echo "rule installed, enabled, idempotent, and accepted by karabiner_cli"
 
   # The decisive Linux gate: a REAL kernel device, a real grab, real uinput.
   linux-uinput:

@@ -735,3 +735,74 @@ class TestLinuxBackendEndToEnd(unittest.TestCase):
     def test_unmapped_key_passes_through_untouched(self):
         written, _ = self._run({"esc": "home"}, [(110, 1)])  # KEY_TAB unmapped
         self.assertIn(("pass", 110, 1), written)
+
+
+class TestKarabinerAutoEnable(unittest.TestCase):
+    """Dropping a file in assets/ only makes a rule available; enabling it in
+    the selected profile is what makes it actually work."""
+
+    def _profile_doc(self, extra_rules=None):
+        return {"global": {"show_in_menu_bar": True},
+                "profiles": [
+                    {"name": "Default", "selected": False,
+                     "complex_modifications": {"rules": []}},
+                    {"name": "Work", "selected": True,
+                     "complex_modifications": {
+                         "rules": list(extra_rules or [])}},
+                ]}
+
+    def _run_enable(self, doc):
+        cfg = cfgmod.load(write_cfg(BASE_DOC), plat="darwin", host="mac")
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "karabiner.json")
+            with open(p, "w") as f:
+                json.dump(doc, f)
+            ok, detail = mac.enable_in_profile(cfg, p)
+            with open(p) as f:
+                after = json.load(f)
+            backup = os.path.exists(p + ".keyremap-backup")
+        return ok, detail, after, backup
+
+    def test_rules_land_in_the_selected_profile(self):
+        ok, detail, after, _ = self._run_enable(self._profile_doc())
+        self.assertTrue(ok, detail)
+        selected = [p for p in after["profiles"] if p.get("selected")][0]
+        descs = [r["description"] for r in
+                 selected["complex_modifications"]["rules"]]
+        self.assertTrue(any(d.startswith("keyremap:") for d in descs))
+        unselected = [p for p in after["profiles"] if not p.get("selected")][0]
+        self.assertEqual(unselected["complex_modifications"]["rules"], [])
+
+    def test_user_rules_are_preserved(self):
+        mine = {"description": "my own rule", "manipulators": []}
+        ok, _, after, _ = self._run_enable(self._profile_doc([mine]))
+        self.assertTrue(ok)
+        rules = [p for p in after["profiles"]
+                 if p.get("selected")][0]["complex_modifications"]["rules"]
+        self.assertIn(mine, rules)
+
+    def test_reapplying_replaces_rather_than_duplicates(self):
+        cfg = cfgmod.load(write_cfg(BASE_DOC), plat="darwin", host="mac")
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "karabiner.json")
+            with open(p, "w") as f:
+                json.dump(self._profile_doc(), f)
+            for _ in range(3):
+                self.assertTrue(mac.enable_in_profile(cfg, p)[0])
+            with open(p) as f:
+                after = json.load(f)
+        rules = [x for x in [pr for pr in after["profiles"]
+                             if pr.get("selected")][0]
+                 ["complex_modifications"]["rules"]
+                 if x["description"].startswith("keyremap:")]
+        self.assertEqual(len(rules), 1, "re-applying duplicated the rule")
+
+    def test_a_backup_is_written_once(self):
+        _, _, _, backup = self._run_enable(self._profile_doc())
+        self.assertTrue(backup, "no pre-change backup of karabiner.json")
+
+    def test_missing_file_is_reported_not_crashed(self):
+        cfg = cfgmod.load(write_cfg(BASE_DOC), plat="darwin", host="mac")
+        ok, detail = mac.enable_in_profile(cfg, "/nonexistent/karabiner.json")
+        self.assertFalse(ok)
+        self.assertIn("not found", detail)

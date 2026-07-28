@@ -48,8 +48,13 @@ configuration problem, it's an interception problem.
 ```sh
 curl -fsSL https://raw.githubusercontent.com/fire17/keyremap/main/install.sh | sh
 keyremap selftest     # proves the install is sound on THIS machine
-keyremap apply        # build + deploy for this OS
+keyremap apply        # build, deploy, and switch it on
 ```
+
+On macOS that last command does the whole job: it writes the rule, installs it where Karabiner
+reads it, **and enables it in your selected profile** — no clicking through the Karabiner UI.
+Your existing rules are preserved, re-running never duplicates, and your `karabiner.json` is
+backed up first. (CI proves all three on a real Mac.)
 
 Then type `keyremap` for the control room, or `keyremap gui` for the desktop app.
 No pip, no venv, no dependencies — everything is Python standard library, **including the YAML

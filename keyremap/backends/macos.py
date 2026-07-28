@@ -115,8 +115,54 @@ def lint_with_karabiner(path: str) -> tuple[bool, str]:
         return False, f"{type(e).__name__}: {e}"
 
 
+KARABINER_JSON = os.path.expanduser("~/.config/karabiner/karabiner.json")
+
+
+def enable_in_profile(cfg: Config, path: str = KARABINER_JSON) -> tuple[bool, str]:
+    """Add our rules to Karabiner's SELECTED profile so they are live.
+
+    Dropping a file into assets/ only makes a rule *available* — the user still
+    has to add it by hand in the UI. Karabiner watches karabiner.json and
+    reloads on write, so merging the rules in is the difference between
+    "installed" and "working".
+
+    Idempotent: our rules are identified by their `keyremap:` description and
+    replaced, never duplicated. Anything the user added stays untouched.
+    """
+    if not os.path.exists(path):
+        return False, "karabiner.json not found (launch Karabiner-Elements once)"
+    try:
+        with open(path) as f:
+            doc = json.load(f)
+    except (OSError, ValueError) as e:
+        return False, f"could not read karabiner.json: {e}"
+
+    ours = json.loads(generate(cfg))["rules"]
+    profiles = doc.get("profiles") or []
+    if not profiles:
+        return False, "karabiner.json has no profiles"
+    target = next((p for p in profiles if p.get("selected")), profiles[0])
+
+    cm = target.setdefault("complex_modifications", {})
+    rules = cm.setdefault("rules", [])
+    kept = [r for r in rules
+            if not str(r.get("description", "")).startswith("keyremap:")]
+    cm["rules"] = kept + ours
+
+    backup = path + ".keyremap-backup"
+    if not os.path.exists(backup):
+        with open(backup, "w") as f:
+            json.dump(doc, f, indent=4)  # pre-change copy, written once
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(doc, f, indent=4)
+    os.replace(tmp, path)   # atomic; Karabiner reloads on write
+    return True, (f"enabled {len(ours)} rule(s) in profile "
+                  f"{target.get('name', '(unnamed)')!r}")
+
+
 def apply(cfg: Config, out_dir: str, dry_run: bool = False,
-          install: bool = True) -> str:
+          install: bool = True, enable: bool = True) -> str:
     """Write the rule, install it where Karabiner reads it, and lint it there.
 
     Installing matters: a file in out/ helps nobody, and hand-copying it is
@@ -136,4 +182,7 @@ def apply(cfg: Config, out_dir: str, dry_run: bool = False,
         with open(installed, "w") as f:
             f.write(text)
         path = installed
+        if enable:
+            ok, detail = enable_in_profile(cfg)
+            print(f"{'enabled' if ok else 'not enabled'}: {detail}")
     return path

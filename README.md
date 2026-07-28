@@ -254,12 +254,14 @@ Layout: `keys.py` (one canonical key table → Windows/evdev/Karabiner names), `
 
 | Path | State |
 |---|---|
-| Windows (Interception) | **used daily, verified end-to-end** on real hardware |
+| Windows (Interception) | **used daily on real hardware**, every mapping observed firing |
+| **macOS (Karabiner)** | **verified on a real Mac in CI** — Karabiner's own `karabiner_cli --lint-complex-modifications` accepts the generated rule, and it is installed into Karabiner's assets dir and re-linted from there |
+| **Linux (evdev)** | **verified against a real kernel in CI** — a virtual keypad is created, grabbed, and the remapped events are read back: ESC→HOME, PAGEDOWN held as LEFTCTRL, tap-vs-hold at the threshold |
 | Native GUI (tkinter) | **verified running** on Windows with live device detection |
 | Browser GUI | **verified running** (served and loaded from another OS's browser) |
-| CLI on native Windows Python | **verified** — 64 tests + selftest green, no pyyaml installed |
-| macOS (Karabiner) | every emitted `key_code` checked against **Karabiner's own upstream vocabulary**; `karabiner_cli --lint` runs automatically on a Mac. **Not yet loaded by a running Karabiner** |
-| Linux (evdev) | run-loop driven end-to-end against a **fake kernel** (grab, select, hold deadlines, uinput output). **Real kernel grab not yet run** |
+| CLI on native Windows Python | **verified** — full suite + selftest green with no pyyaml installed |
+
+CI runs the suite on real macOS, Linux and Windows on every push, so these stay true.
 
 Run `keyremap selftest` on a new machine and it will tell you which of these apply to you.
 

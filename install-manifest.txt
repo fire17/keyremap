@@ -9,6 +9,7 @@ keyremap/backends/linux_evdev.py
 keyremap/backends/macos.py
 keyremap/backends/windows.py
 keyremap/config.py
+keyremap/console.py
 keyremap/data/karabiner_key_codes.json
 keyremap/doctor.py
 keyremap/engine.py

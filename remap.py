@@ -29,14 +29,6 @@ from keyremap.config import load, find_config, lint
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def _utf8_console():
-    """Windows consoles default to cp1252 and blow up on '✓'. Ask for UTF-8,
-    and degrade to replacement characters rather than crashing a status report."""
-    for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(encoding="utf-8", errors="replace")
-        except (AttributeError, ValueError, OSError):
-            pass
 
 
 def get_backend(env: str):
@@ -201,7 +193,8 @@ def cmd_import(cfg, env, args):
 
 
 def main():
-    _utf8_console()
+    from keyremap.console import utf8
+    utf8()
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--config", "-c", help="path to config.yaml/json")

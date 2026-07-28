@@ -1090,3 +1090,26 @@ class TestCrossPlatformEquivalence(unittest.TestCase):
         ev = [("down", 0), ("tick", 399), ("up", 399)]
         out = self._compare(m, "home", "home", ev, 400)
         self.assertEqual([s.split("+")[-1] for s in out], ["a"])
+
+
+class TestConsoleGuard(unittest.TestCase):
+    """Windows cp1252 killed a status report twice. One shared guard now, and
+    every entry point that prints non-ASCII must use it."""
+
+    def test_guard_never_raises_on_odd_streams(self):
+        from keyremap.console import utf8
+        class NoReconfigure:
+            pass
+        utf8(NoReconfigure())          # must not raise
+        import io
+        utf8(io.StringIO())            # nor on a StringIO
+
+    def test_entry_points_that_print_glyphs_call_the_guard(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        for rel in ("remap.py", "tests/bench.py"):
+            with open(os.path.join(root, rel), encoding="utf-8") as f:
+                src = f.read()
+            has_glyphs = any(g in src for g in ("✓", "✗", "→", "·"))
+            if has_glyphs:
+                self.assertIn("from keyremap.console import utf8", src,
+                              f"{rel} prints non-ASCII without the console guard")

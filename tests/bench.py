@@ -102,6 +102,8 @@ def measure() -> dict:
 
 
 def main() -> int:
+    from keyremap.console import utf8
+    utf8()
     got = measure()
     as_json = "--json" in sys.argv
     if as_json:

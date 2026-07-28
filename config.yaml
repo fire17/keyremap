@@ -1,12 +1,18 @@
-# keyremap — portable per-device key remapping config.
-# This file is OS-agnostic: the same config drives every backend
-# (Windows/WSL via AutoHotInterception, Linux via evdev/uinput,
-#  macOS via a generated Karabiner-Elements rule).
+# keyremap — portable per-device key remapping.
+#
+# This file travels with you. Plug the same device into any machine, run
+# `keyremap apply`, and you get the same behaviour — because devices are
+# identified by their hardware id, not by a port or a driver name.
+#
+# Layers merge in order: base -> os:<platform> -> host:<hostname>
+#   base        the portable truth, applies everywhere
+#   os:         only on that platform (darwin | windows | linux | wsl)
+#   host:       only on that machine (hostname, lower-case)
+# A later layer overrides a single key; `key: null` removes an inherited one.
+
+version: 2
 
 devices:
-  # Logical name -> how to recognize the physical device on any OS.
-  # vendor_id/product_id are the portable identifiers (same on every OS).
-  # name_contains is a fallback for backends/devices that don't expose VID/PID.
   keypad:
     match:
       vendor_id: 0x045E
@@ -14,38 +20,43 @@ devices:
       name_contains: "Keypad"
 
 options:
-  # Keys not listed in mappings pass through unchanged.
   passthrough_unmapped: true
-  # Some BLE keypads implement nav keys (Home/End/arrows) by toggling
-  # NumLock around a numpad scancode. When true, NumLock events coming
-  # from a mapped device are swallowed so system NumLock state is not
-  # disturbed. (Observed on this keypad: NumLock + fake-Shift + Home.)
+  # Some BLE keypads implement nav keys by toggling NumLock around a numpad
+  # scancode. Swallow that churn so system NumLock state is not disturbed.
   swallow_numlock_quirk: true
 
-mappings:
-  # <logical device>: { <source key>: <target key or combo> }
-  # Key names are canonical (see keyremap/keys.py); combos use '+',
-  # e.g. "ctrl+shift+p".
-  # Source names are what the key EMITS (captured 2026-07-28):
-  # physical "clear" emits backspace, "=" emits equal, tab/esc are literal.
-  keypad:
-    backspace: end       # physical "clear" key
-    equal: pagedown      # physical "=" key
-    tab: pageup
-    esc: home
-    # Dedicated nav keys on the keypad (extended scancodes E0 51 / E0 49)
-    # become held modifiers: pressed = modifier down, released = modifier up.
-    pagedown: lctrl
-    pageup: lshift
-    delete: backspace    # keypad "del" (E0 53) deletes backwards
-    insert: delete       # keypad "ins" (E0 52) deletes forwards
-    # "accel" is the portable shortcut modifier: Ctrl on Windows/Linux,
-    # Command on macOS — so these are select-all/copy/paste everywhere.
-    # Quick tap selects all (on RELEASE, so nothing happens while deciding).
-    # Holding past hold_ms selects all AND copies, both at that mark — seeing
-    # the selection appear late is the confirmation that the copy happened too.
-    home:
-      tap: accel+a
-      hold: [accel+a, accel+c]
-      hold_ms: 400
-    end: accel+v         # paste
+profiles:
+  # ---------------------------------------------------------------- base ----
+  # Everything here applies on every computer this config lands on.
+  base:
+    keypad:
+      backspace: end       # physical "clear" key
+      equal: pagedown      # physical "=" key
+      tab: pageup
+      esc: home
+      delete: backspace    # keypad "del" deletes backwards
+      insert: delete       # keypad "ins" deletes forwards
+
+      # A key can BE a modifier — held for as long as you hold it.
+      pagedown: lctrl
+      pageup: lshift
+
+      # "accel" = Ctrl on Windows/Linux, Command on macOS. One line, both OSes.
+      end: accel+v         # paste
+
+      # Tap selects all (on release); holding past 400ms selects all AND copies,
+      # so seeing the selection appear late proves the copy happened too.
+      home:
+        tap: accel+a
+        hold: [accel+a, accel+c]
+        hold_ms: 400
+
+  # ------------------------------------------------------------ overrides ----
+  # Per-platform tweaks. Everything not listed is inherited from base.
+  os:
+    darwin: {}
+    windows: {}
+    linux: {}
+
+  # Per-machine tweaks, keyed by hostname (lower-case).
+  host: {}

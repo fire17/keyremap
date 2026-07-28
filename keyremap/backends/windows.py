@@ -25,6 +25,43 @@ def _ps(args: list[str], **kw) -> subprocess.CompletedProcess:
                           capture_output=True, text=True, **kw)
 
 
+def ps(args: list[str], timeout: int = 20) -> tuple[int, str]:
+    """PowerShell helper used by doctor: returns (returncode, combined output)."""
+    try:
+        r = _ps(args, timeout=timeout)
+        return r.returncode, (r.stdout or "") + (r.stderr or "")
+    except Exception as e:  # noqa: BLE001
+        return 1, f"{type(e).__name__}: {e}"
+
+
+AHK_CANDIDATES = (
+    r"%LOCALAPPDATA%\Programs\AutoHotkey\v2\AutoHotkey64.exe",
+    r"%ProgramFiles%\AutoHotkey\v2\AutoHotkey64.exe",
+)
+
+
+def find_autohotkey() -> str | None:
+    """Windows path of AutoHotkey v2, or None. Works from WSL too."""
+    rc, out = ps(["-Command",
+                  "$p=@(\"$env:LOCALAPPDATA\\Programs\\AutoHotkey\\v2\\AutoHotkey64.exe\","
+                  "\"$env:ProgramFiles\\AutoHotkey\\v2\\AutoHotkey64.exe\");"
+                  "foreach($x in $p){ if(Test-Path $x){ $x; break } }"])
+    path = out.strip().splitlines()[0].strip() if rc == 0 and out.strip() else ""
+    return path or None
+
+
+def lib_dir_hint() -> str | None:
+    """Where AutoHotInterception's Lib/ was found, if anywhere."""
+    for base in (os.path.join(ASSETS, "..", "out"),):
+        for root, dirs, _ in os.walk(os.path.abspath(base)):
+            if "Lib" in dirs:
+                return os.path.join(root, "Lib")
+    rc, out = ps(["-Command",
+                  "$d=\"$env:USERPROFILE\\keyremap\\Lib\"; if(Test-Path $d){$d}"])
+    p = out.strip() if rc == 0 else ""
+    return p or None
+
+
 def _stage_script(name: str) -> str:
     """Copy an asset .ps1 to Windows temp; return its Windows path."""
     from ..envinfo import windows_temp_dir, to_windows_path

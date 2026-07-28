@@ -1,10 +1,37 @@
-"""Config loading + validation. YAML preferred, JSON fallback (zero-dep)."""
+"""Config loading, validation and LAYERED profile resolution.
+
+A config has one portable base layer plus optional overrides that only apply on
+a given OS or a given machine, so the same file can travel between computers and
+produce the same behaviour everywhere — while still allowing local deviations.
+
+    profiles:
+      base:            # everywhere
+        keypad: {esc: home}
+      os:
+        darwin:        # only on macOS
+          keypad: {esc: escape}
+      host:
+        tamis-mac:     # only on that machine (hostname, case-insensitive)
+          keypad: {home: accel+space}
+
+Resolution order (later wins, per source key): base -> os.<platform> -> host.<name>.
+A layer may also *remove* an inherited mapping with `key: null`.
+
+v1 configs (a top-level `mappings:` block) are still accepted and are treated as
+the base layer, so nothing that worked before breaks.
+"""
 
 import json
 import os
+import platform
+import socket
 from dataclasses import dataclass, field
 
 from .keys import canon, parse_target
+
+DEFAULT_HOLD_MS = 1000
+
+Target = tuple[list[str], str]  # (modifiers, key) from parse_target
 
 
 @dataclass
@@ -21,11 +48,12 @@ class DeviceMatch:
             return True
         return False
 
-
-DEFAULT_HOLD_MS = 1000
-
-
-Target = tuple[list[str], str]  # (modifiers, key) from parse_target
+    @property
+    def fingerprint(self) -> str:
+        """Stable identity of the physical device, portable across machines."""
+        if self.vendor_id is not None and self.product_id is not None:
+            return f"usb:{self.vendor_id:04x}:{self.product_id:04x}"
+        return f"name:{(self.name_contains or '').lower()}"
 
 
 @dataclass
@@ -36,10 +64,6 @@ class Action:
     tap:   sent on RELEASE, only if released before hold_ms elapsed
     hold:  sent at the hold_ms mark while the key is still held
            (and the tap action is then suppressed on release)
-
-    press is for plain remaps; tap/hold express "quick tap does X,
-    holding does Y" — the hold action fires while the key is still down,
-    so the user sees its effect as confirmation.
     """
     press: list[Target] | None = None
     tap: list[Target] | None = None
@@ -50,15 +74,37 @@ class Action:
     def is_simple(self) -> bool:
         return self.tap is None and self.hold is None
 
+    def describe(self) -> str:
+        def fmt(seq):
+            return " then ".join("+".join(m + [k]) if m else k for m, k in seq)
+        bits = []
+        if self.press:
+            bits.append(fmt(self.press))
+        if self.tap:
+            bits.append(f"tap:{fmt(self.tap)}")
+        if self.hold:
+            bits.append(f"hold {self.hold_ms}ms:{fmt(self.hold)}")
+        return "  ".join(bits)
+
 
 @dataclass
 class Config:
     devices: dict[str, DeviceMatch] = field(default_factory=dict)
-    # device -> { source_key: Action }
+    # resolved: device -> { source_key: Action }
     mappings: dict[str, dict[str, Action]] = field(default_factory=dict)
     passthrough_unmapped: bool = True
     swallow_numlock_quirk: bool = True
     path: str = ""
+    version: int = 1
+    # provenance for the UI: which layers existed and which were applied
+    layers_available: list[str] = field(default_factory=list)
+    layers_applied: list[str] = field(default_factory=list)
+    # device -> { source_key: layer_name } — where each effective mapping came from
+    origin: dict[str, dict[str, str]] = field(default_factory=dict)
+    raw: dict = field(default_factory=dict)
+
+    def device_fingerprints(self) -> dict[str, str]:
+        return {n: d.fingerprint for n, d in self.devices.items()}
 
 
 def _to_int(v) -> int | None:
@@ -69,35 +115,19 @@ def _to_int(v) -> int | None:
     return int(str(v), 0)  # accepts "0x045E" and "1118"
 
 
-def load(path: str) -> Config:
-    with open(path) as f:
-        text = f.read()
-    try:
-        import yaml
-        raw = yaml.safe_load(text)
-    except ImportError:
-        raw = json.loads(text)
-
-    cfg = Config(path=os.path.abspath(path))
-    for name, spec in (raw.get("devices") or {}).items():
-        m = (spec or {}).get("match") or {}
-        cfg.devices[name] = DeviceMatch(
-            vendor_id=_to_int(m.get("vendor_id")),
-            product_id=_to_int(m.get("product_id")),
-            name_contains=m.get("name_contains"),
-        )
-
-    opts = raw.get("options") or {}
-    cfg.passthrough_unmapped = bool(opts.get("passthrough_unmapped", True))
-    cfg.swallow_numlock_quirk = bool(opts.get("swallow_numlock_quirk", True))
-
-    for dev, table in (raw.get("mappings") or {}).items():
-        if dev not in cfg.devices:
-            raise ValueError(f"mappings refer to unknown device {dev!r}")
-        cfg.mappings[dev] = {}
-        for src, dst in (table or {}).items():
-            cfg.mappings[dev][canon(str(src))] = _parse_action(src, dst)
-    return cfg
+def current_env() -> tuple[str, str]:
+    """(platform_key, host_key) used to select override layers."""
+    sysname = platform.system().lower()
+    plat = {"darwin": "darwin", "windows": "windows", "linux": "linux"}.get(
+        sysname, sysname)
+    if plat == "linux":
+        try:
+            with open("/proc/sys/kernel/osrelease") as f:
+                if "microsoft" in f.read().lower():
+                    plat = "wsl"
+        except OSError:
+            pass
+    return plat, socket.gethostname().lower()
 
 
 def _parse_seq(value) -> list[Target]:
@@ -107,14 +137,7 @@ def _parse_seq(value) -> list[Target]:
 
 
 def _parse_action(src, spec) -> Action:
-    """Accept a plain target ('end', 'accel+v') or a dict:
-
-        home:
-          tap:  accel+a               # on release, if released quickly
-          hold: [accel+a, accel+c]    # at the 1s mark, still held
-          hold_ms: 1000               # default 1000
-          # 'press:' is also available - fires immediately on key-down
-    """
+    """Accept a plain target ('end', 'accel+v') or a dict with press/tap/hold."""
     if not isinstance(spec, dict):
         return Action(press=_parse_seq(spec))
     press, tap, hold = spec.get("press"), spec.get("tap"), spec.get("hold")
@@ -132,9 +155,118 @@ def _parse_action(src, spec) -> Action:
     )
 
 
+def parse_document(raw: dict) -> dict:
+    """Split a raw config document into its layers. Returns {name: table}."""
+    layers: dict[str, dict] = {}
+    profiles = raw.get("profiles")
+    if profiles:
+        if profiles.get("base"):
+            layers["base"] = profiles["base"]
+        for plat, table in (profiles.get("os") or {}).items():
+            layers[f"os:{str(plat).lower()}"] = table
+        for host, table in (profiles.get("host") or {}).items():
+            layers[f"host:{str(host).lower()}"] = table
+    if raw.get("mappings"):  # v1 document, or v2 with an extra implicit base
+        layers.setdefault("base", {})
+        merged = dict(layers["base"])
+        merged.update(raw["mappings"])
+        layers["base"] = merged
+    return layers
+
+
+def resolve_layers(layers: dict[str, dict], plat: str, host: str
+                   ) -> tuple[dict, list[str], dict]:
+    """Merge base -> os:<plat> -> host:<host>. Returns (table, applied, origin)."""
+    order = ["base", f"os:{plat}", f"host:{host}"]
+    applied, merged, origin = [], {}, {}
+    for name in order:
+        table = layers.get(name)
+        if table is None:
+            continue
+        applied.append(name)
+        for dev, keys in (table or {}).items():
+            dev_map = merged.setdefault(dev, {})
+            dev_origin = origin.setdefault(dev, {})
+            for src, spec in (keys or {}).items():
+                if spec is None:          # explicit removal in this layer
+                    dev_map.pop(src, None)
+                    dev_origin.pop(src, None)
+                    continue
+                dev_map[src] = spec
+                dev_origin[src] = name
+    return merged, applied, origin
+
+
+def load(path: str, plat: str | None = None, host: str | None = None) -> Config:
+    with open(path) as f:
+        text = f.read()
+    try:
+        import yaml
+        raw = yaml.safe_load(text) or {}
+    except ImportError:
+        raw = json.loads(text)
+
+    if plat is None or host is None:
+        cur_plat, cur_host = current_env()
+        plat = plat or cur_plat
+        host = host or cur_host
+
+    cfg = Config(path=os.path.abspath(path), raw=raw)
+    cfg.version = int(raw.get("version", 2 if raw.get("profiles") else 1))
+
+    for name, spec in (raw.get("devices") or {}).items():
+        m = (spec or {}).get("match") or {}
+        cfg.devices[name] = DeviceMatch(
+            vendor_id=_to_int(m.get("vendor_id")),
+            product_id=_to_int(m.get("product_id")),
+            name_contains=m.get("name_contains"),
+        )
+
+    opts = raw.get("options") or {}
+    cfg.passthrough_unmapped = bool(opts.get("passthrough_unmapped", True))
+    cfg.swallow_numlock_quirk = bool(opts.get("swallow_numlock_quirk", True))
+
+    layers = parse_document(raw)
+    cfg.layers_available = sorted(layers)
+    merged, applied, origin = resolve_layers(layers, plat, host)
+    cfg.layers_applied = applied
+    cfg.origin = origin
+
+    for dev, table in merged.items():
+        if dev not in cfg.devices:
+            raise ValueError(f"mappings refer to unknown device {dev!r}")
+        cfg.mappings[dev] = {}
+        for src, spec in (table or {}).items():
+            cfg.mappings[dev][canon(str(src))] = _parse_action(src, spec)
+    return cfg
+
+
 def find_config(start_dir: str) -> str:
     for name in ("config.yaml", "config.yml", "config.json"):
         p = os.path.join(start_dir, name)
         if os.path.exists(p):
             return p
     raise FileNotFoundError(f"no config.yaml/config.json found in {start_dir}")
+
+
+def lint(cfg: Config) -> list[str]:
+    """Non-fatal problems worth showing the user. Empty list == clean."""
+    problems = []
+    for dev, table in cfg.mappings.items():
+        seen: dict[str, str] = {}
+        for src, act in table.items():
+            for seq in (act.press, act.tap, act.hold):
+                for mods, dst in (seq or []):
+                    key = "+".join(mods + [dst])
+                    if key in seen and seen[key] != src:
+                        problems.append(
+                            f"{dev}: '{src}' and '{seen[key]}' both produce {key}")
+                    seen.setdefault(key, src)
+            if act.tap and act.press:
+                problems.append(
+                    f"{dev}: '{src}' has both press and tap — press fires on "
+                    "key-down and tap on release, which is rarely intended")
+    for dev in cfg.devices:
+        if dev not in cfg.mappings or not cfg.mappings[dev]:
+            problems.append(f"device '{dev}' is declared but has no mappings")
+    return problems

@@ -1,142 +1,202 @@
-# keyremap — portable per-device key remapping
+# keyremap
 
-Remap keys on **one specific input device** (e.g. a Bluetooth keypad) without
-touching any other keyboard. One OS-agnostic `config.yaml` drives every
-platform backend.
+**Remap one keyboard without touching the others — and take that mapping to any computer.**
+
+Plug a keypad into a Mac, a PC and a Linux box, run one command on each, and all three
+behave identically. Devices are identified by their *hardware id*, so the config is
+portable by construction; per-OS and per-machine layers let you deviate where you must
+without forking the base.
 
 ```
-config.yaml          what to remap (devices by VID/PID + mappings)
-remap.py             CLI: detect | listen | check | apply
-keyremap/keys.py     canonical key table (VK/scancode/AHK/evdev/Karabiner)
-keyremap/backends/   windows.py  linux_evdev.py  macos.py
-assets/              RawKbListen.ps1 (Windows raw-input listener)
-out/<env>/           generated artifacts (AHK script / Karabiner JSON)
+keyremap            # the control room (TUI)
+keyremap gui        # the desktop app
+keyremap doctor     # what this machine still needs, and the exact fix
+keyremap apply      # build + deploy for this OS
 ```
 
-## Commands
+---
 
-```bash
-python3 remap.py detect          # list devices, mark which match config
-python3 remap.py listen [secs]   # stream keydowns tagged with source device
-python3 remap.py check           # validate config against ALL backends
-python3 remap.py apply           # build/run remapping for this OS
+## Install
+
+**macOS / Linux / WSL**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/OWNER/keyremap/main/install.sh | sh
 ```
 
-## How each platform works
+**Windows** — clone, then run `windows-tools\install.ps1` (or use WSL, which drives the
+Windows side automatically).
 
-| Env | Detect/listen | Remap mechanism | Activation |
-|---|---|---|---|
-| **Windows / WSL** | Raw Input API (per-device attribution) | AutoHotkey v2 + AutoHotInterception (Interception kernel driver) → true per-device blocking | run generated `.ahk`; add to Startup folder |
-| Windows (no driver) | same | `apply --mode heuristic`: plain AHK, identifies the keypad by its NumLock-churn fingerprint | degraded — only for devices with that quirk |
-| **Linux** | evdev | grab device + re-emit via uinput (live daemon) | `apply` runs it; systemd unit template in `linux_evdev.py` |
-| **macOS** | `hidutil list` | generated Karabiner-Elements rule with `device_if` VID/PID condition | copy JSON to `~/.config/karabiner/assets/complex_modifications/`, enable rule |
+No pip, no venv, no dependencies: everything is Python standard library. `pyyaml` is used
+if present, otherwise a JSON config works identically.
 
-WSL note: WSL2 has no `/dev/input`; the tool auto-detects WSL and drives the
-Windows side through `powershell.exe` interop.
+### Taking your setup to another computer
 
-## Windows one-time setup (interception mode) — no reboot required
+```sh
+keyremap export                 # writes keyremap-<host>.keyremap
+# …copy that one file across…
+keyremap import keyremap-*.keyremap
+keyremap doctor && keyremap apply
+```
 
-1. Install [AutoHotkey v2](https://www.autohotkey.com/).
-2. Download [AutoHotInterception](https://github.com/evilC/AutoHotInterception/releases);
-   put its `Lib\` (including `AutoHotInterception.dll` from `Common\Lib\`) next
-   to the generated `.ahk`.
-3. From AHI's release, run `install-interception.exe /install` **as admin**.
-4. **Instead of rebooting**, restart just the target device so the newly
-   registered class filter attaches to its stack (admin):
+That is the whole migration. Your existing config is backed up, never overwritten.
 
-       pnputil /restart-device "<device instance id>"
+---
 
-   Get the id from `remap.py detect`. Only that device is disrupted (~2 s);
-   the built-in keyboard is untouched and never gets the filter this way.
-5. `python3 remap.py apply` → run `out/<env>/keyremap_interception.ahk`.
-6. Auto-start: `keyremap-launch.cmd` in `shell:startup` (picks interception
-   mode when the driver is present, else the heuristic fallback).
+## The idea
 
-### Gotchas that cost real debugging time
+Two keyboards can emit *byte-identical* keystrokes — same virtual key, same scancode. The
+only thing that separates them is which device the event came from, so remapping "just the
+keypad" requires device-aware interception, not a registry tweak or a global hotkey script.
+keyremap owns that plumbing on three platforms and hides it behind one config file.
 
-- **Bluetooth-LE HID devices report VID/PID as `0x0000` to the Interception
-  driver**, so `GetKeyboardId(vid, pid)` fails *and pops its own MsgBox before
-  your `try` can catch it*. Match on the device **handle** substring instead
-  (e.g. `VID&02045e_PID&0040`) via `AHI.GetInstance().GetDeviceList()`.
-- **Heuristic mode is a genuine fallback, not an equal**: this keypad's
-  firmware watches NumLock LED feedback and *stops emitting* its NumLock
-  churn if you swallow it (or force `SetNumLockState "AlwaysOn"`), destroying
-  the very fingerprint the mode relies on. Let the churn through; only record
-  timestamps.
-- **Never hold a log file open from WSL (`tail -f` on `/mnt/c/...`) while a
-  Windows process appends to it** — the sharing violation makes AHK's
-  `FileAppend` throw *inside the hotkey*, which swallows that key
-  system-wide behind a modal dialog. Log after `Send`, wrapped in `try`.
-- A LL-hook + Raw Input "fusion" approach (block in the hook, attribute via
-  `WM_INPUT`) does **not** work: the raw event does not arrive while the hook
-  is blocking, so attribution always times out. Kept in git history as a
-  dead end; use the driver.
+| Platform | Mechanism | Reboot? |
+|---|---|---|
+| **macOS** | generated Karabiner-Elements rules (`device_if` on vendor/product id) | no |
+| **Windows / WSL** | AutoHotkey v2 + AutoHotInterception (Interception driver) | no — see below |
+| **Linux** | evdev grab + uinput re-emit (live daemon) | no |
+
+WSL2 has no `/dev/input`; keyremap detects that and drives the Windows side over
+`powershell.exe` interop.
+
+---
 
 ## Config
 
+One file. Layers merge **base → os:*platform* → host:*hostname*** (later wins per key,
+`null` removes an inherited mapping).
+
 ```yaml
+version: 2
+
 devices:
   keypad:
     match: { vendor_id: 0x045E, product_id: 0x0040, name_contains: "Keypad" }
 
-options:
-  passthrough_unmapped: true
-  swallow_numlock_quirk: true   # BLE keypads that churn NumLock around nav keys
+profiles:
+  base:                      # everywhere — this is what travels
+    keypad:
+      esc: home
+      pagedown: lctrl        # a key can BE a modifier (held, not tapped)
+      end: accel+v           # accel = Ctrl on Win/Linux, Command on macOS
+      home:
+        tap: accel+a         # on release, if released quickly
+        hold: [accel+a, accel+c]   # at the threshold, still held
+        hold_ms: 400
 
-mappings:
-  keypad:
-    # simple remap — key names and aliases live in keyremap/keys.py
-    clear: end
-    esc: home
-
-    # a key can BE a modifier: held down while you press others
-    pagedown: lctrl
-    pageup: lshift
-
-    # combos; "accel" is Ctrl on Windows/Linux and Command on macOS
-    end: accel+v                # paste, on every platform
-
-    # press / tap / hold — any of them may be a list (a sequence)
-    home:
-      tap: accel+a              # fires on RELEASE, if released quickly
-      hold: [accel+a, accel+c]  # fires at the hold_ms mark, suppresses the tap
-      hold_ms: 400
+  os:
+    darwin:                  # only on macOS
+      keypad: { esc: escape }
+  host:
+    tamis-mac:               # only on that machine
+      keypad: { tab: null }  # remove an inherited mapping here
 ```
 
-**Action semantics**
+### Actions
 
 | Field | Fires |
 |---|---|
 | `press` | immediately on key-down (the default for a plain `key: target` line) |
-| `tap` | on release, only if released before `hold_ms` |
-| `hold` | at the `hold_ms` mark while still held — and then `tap` is suppressed |
+| `tap` | on release — only if released before `hold_ms` |
+| `hold` | at the `hold_ms` mark while still held; suppresses `tap` |
 
-The tap/hold split is useful when you want the effect to be *visible confirmation*:
-tap = select all, hold = select all **and** copy, so seeing the selection appear late
-tells you the copy ran too.
+Any of them may be a **list**, which runs as a sequence. That is how "tap = select all,
+hold = select all **and** copy" works: seeing the selection appear late is your proof the
+copy ran too.
 
-**Portability.** `accel` and the tap/hold model are implemented natively per platform —
-AutoHotkey timers on Windows, Karabiner's `to_if_alone` / `to_if_held_down` on macOS,
-and deadline handling in the evdev loop on Linux. One config, no per-OS edits.
+`accel` is the portable shortcut modifier — write `accel+a` once and get Ctrl+A on
+Windows/Linux and Cmd+A on macOS. Aliases: `mod`, `cmdctrl`, `super`.
 
-## Finding your device's key codes
+---
 
-Never guess scancodes — capture them. On Windows, `windows-tools/list-devices.ahk`
-enumerates what the driver sees, and a capture script (non-blocking `SubscribeKeyboard`)
-logs the exact code for each key you press. `remap.py listen` does the same at the
-Raw Input level, tagging every keystroke with its source device.
+## The control room (TUI)
 
-Real example: this keypad's nav keys are numpad keys — the firmware sends
-NumLock↓ + fake-Shift + key + NumLock↑ around each one (hence `swallow_numlock_quirk`),
-and its extended keys arrive as `0x147` (Home), `0x14F` (End), `0x149`/`0x151`
-(PgUp/PgDn), `0x152`/`0x153` (Ins/Del) — AutoHotInterception marks E0-extended with
-`0x100`, not `0x200`.
+`keyremap` with no arguments. Five panes, one keystroke apart, ~0% CPU when idle
+(the loop blocks in `select()`), and it hot-reloads the config the moment you save it.
+
+```
+ 1 Dashboard  2 Mappings  3 Capture  4 Doctor  5 Apply ──────────────────────────
+
+  Device
+  configured        keypad
+  fingerprint       keypad → usb:045e:0040
+  present           HID Keyboard Device
+
+  Engine
+  backend           wsl
+  last applied      2m ago  (10 mappings)
+
+  Profile layers
+    ● base
+    ○ os:darwin  (not this machine)
+
+  effective         10 mappings
+```
+
+- **Mappings** — every effective mapping *and the layer it came from*, so you always know
+  why a key does what it does.
+- **Capture** — live keystrokes tagged with their source device. Use it to learn a key's
+  real scancode before mapping it; guessing silently fails (see below).
+- **Doctor** — per-platform checks with the exact fix command for anything missing.
+- **Apply** — builds and deploys, and records what was deployed.
+
+`keyremap gui` is the same thing as a desktop window (tkinter, which ships with Python).
+
+---
+
+## Finding a key's real code
+
+Never guess a scancode — capture it. In the TUI press **3** then **s**, or run
+`keyremap listen 30`, then press the key. Real numbers from a Bluetooth keypad:
+
+| Key | Code | Note |
+|---|---|---|
+| Home / End | `0x147` / `0x14F` | E0-extended |
+| PgUp / PgDn | `0x149` / `0x151` | E0-extended |
+| Ins / Del | `0x152` / `0x153` | E0-extended |
+
+AutoHotInterception marks E0-extended with `0x100` — not `0x200`.
+
+---
+
+## Gotchas that cost real debugging time
+
+- **Bluetooth-LE devices report VID/PID as `0x0000` to the Interception driver.**
+  `GetKeyboardId(vid, pid)` therefore fails *and pops its own dialog before your `try` can
+  catch it*. Match the device **handle** substring via `GetDeviceList()` instead.
+- **No reboot is needed after installing the Interception driver.** Restart only the target
+  device — `pnputil /restart-device "<instance-id>"` — and the class filter attaches to it
+  alone. Your built-in keyboard never receives the filter at all.
+- **`Map.Delete()` throws in AutoHotkey v2 when the key is absent**, and a throwing callback
+  dies silently: the key simply stops working while every other key behaves normally.
+  Generated scripts only ever assign, and wrap callbacks in a logging `try`.
+- **Keypads send auto-repeat while held** (27 events in one press, observed), which spams
+  press actions and restarts hold timers forever. Generated scripts ignore repeats.
+- **Driver-free "heuristic" mode is a fallback, not an equal.** One keypad's firmware
+  watches NumLock LED feedback and stops emitting its NumLock churn if you swallow it —
+  destroying the fingerprint the heuristic depends on.
+- **Never hold a `/mnt/c` log open from WSL while Windows appends to it.** The sharing
+  violation makes `FileAppend` throw *inside* a hotkey, swallowing that key behind a modal
+  dialog.
+
+---
+
+## Development
+
+```sh
+python3 -m unittest discover -s tests -v     # 42 tests, ~0.04s
+keyremap check                               # validate config against ALL backends
+```
+
+The codebase is small on purpose: `keys.py` (one canonical key table mapping every key to
+its Windows/evdev/Karabiner name), `config.py` (layering + validation), `backends/`
+(one file per platform), `tui/` and `gui.py` (thin views over shared pure helpers).
 
 ## Status
 
-Windows (Interception mode) is **used daily and verified** — every mapping above was
-observed firing. The Linux and macOS backends generate correct, schema-verified output
-but have **not been run on real hardware yet**; treat them as untested.
+Windows/Interception is used daily and verified end-to-end. The macOS and Linux backends
+generate correct, schema-verified output and are covered by tests, but have not yet been
+run against real hardware.
 
 ## License
 

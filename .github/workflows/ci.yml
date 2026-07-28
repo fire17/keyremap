@@ -166,7 +166,11 @@ jobs:
           which keyremap
           keyremap check
           keyremap doctor || true    # warnings expected on a runner
-          keyremap setup --dry-run   # the guided first-run flow
+          # setup exits non-zero while blockers remain (correct for scripting);
+          # a runner has no Karabiner, so tolerate it and assert it still guides.
+          keyremap setup --dry-run > /tmp/setup.out 2>&1 || true
+          cat /tmp/setup.out
+          grep -q "keyremap setup" /tmp/setup.out
           keyremap selftest
 
       - name: config is installed and re-running never clobbers it

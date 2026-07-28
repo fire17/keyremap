@@ -56,6 +56,12 @@ reads it, **and enables it in your selected profile** — no clicking through th
 Your existing rules are preserved, re-running never duplicates, and your `karabiner.json` is
 backed up first. (CI proves all three on a real Mac.)
 
+> [!NOTE]
+> Each OS reads a device's vendor/product id through a different stack, and if they disagree the
+> rule matches nothing — a silent failure that looks like success. If `selftest` says your device
+> isn't matching, `keyremap adopt` lists what *this* machine reports and rewrites just those two
+> lines in your config, leaving comments and layers untouched.
+
 Then type `keyremap` for the control room, or `keyremap gui` for the desktop app.
 No pip, no venv, no dependencies — everything is Python standard library, **including the YAML
 reader**.

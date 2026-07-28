@@ -806,3 +806,63 @@ class TestKarabinerAutoEnable(unittest.TestCase):
         ok, detail = mac.enable_in_profile(cfg, "/nonexistent/karabiner.json")
         self.assertFalse(ok)
         self.assertIn("not found", detail)
+
+
+class TestAdopt(unittest.TestCase):
+    """A device's ids are read by a different stack on each OS. If they
+    disagree, the rule matches nothing and the keypad silently does nothing."""
+
+    SAMPLE = """# keyremap config
+version: 2
+
+devices:
+  keypad:
+    match:
+      vendor_id: 0x045E     # keep this comment
+      product_id: 0x0040
+      name_contains: "Keypad"
+  other:
+    match:
+      vendor_id: 0x1111
+      product_id: 0x2222
+
+profiles:
+  base:
+    keypad:
+      esc: home
+"""
+
+    def test_rewrites_only_the_named_device(self):
+        from keyremap.adopt import rewrite_ids
+        out, ok = rewrite_ids(self.SAMPLE, "keypad", 0x1234, 0x5678)
+        self.assertTrue(ok)
+        self.assertIn("vendor_id: 0x1234", out)
+        self.assertIn("product_id: 0x5678", out)
+        self.assertIn("vendor_id: 0x1111", out)   # 'other' untouched
+        self.assertIn("product_id: 0x2222", out)
+
+    def test_preserves_comments_and_everything_else(self):
+        from keyremap.adopt import rewrite_ids
+        out, _ = rewrite_ids(self.SAMPLE, "keypad", 0x1234, 0x5678)
+        self.assertIn("# keep this comment", out)
+        self.assertIn("# keyremap config", out)
+        self.assertIn('name_contains: "Keypad"', out)
+        self.assertIn("esc: home", out)
+        self.assertEqual(len(out.splitlines()), len(self.SAMPLE.splitlines()))
+
+    def test_result_still_parses_and_resolves(self):
+        from keyremap.adopt import rewrite_ids
+        out, _ = rewrite_ids(self.SAMPLE, "keypad", 0x1234, 0x5678)
+        fd, p = tempfile.mkstemp(suffix=".yaml")
+        with os.fdopen(fd, "w") as f:
+            f.write(out)
+        cfg = cfgmod.load(p, plat="darwin", host="mac")
+        self.assertEqual(cfg.devices["keypad"].vendor_id, 0x1234)
+        self.assertEqual(cfg.devices["keypad"].product_id, 0x5678)
+        self.assertEqual(cfg.devices["other"].vendor_id, 0x1111)
+        self.assertEqual(cfg.mappings["keypad"]["esc"].press[0][1], "home")
+
+    def test_reports_failure_when_device_absent(self):
+        from keyremap.adopt import rewrite_ids
+        _, ok = rewrite_ids(self.SAMPLE, "nosuchdevice", 1, 2)
+        self.assertFalse(ok)

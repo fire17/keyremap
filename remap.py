@@ -8,6 +8,7 @@
   check             validate config against every backend
   doctor            what this machine is missing, and the exact fix
   selftest          prove the install is sound on this machine
+  adopt             point the config at the device THIS machine reports
   apply             build/run remapping for this OS
   export / import   move your setup to another computer
 
@@ -171,6 +172,12 @@ def cmd_selftest(cfg, env, args):
     return run(cfg)
 
 
+def cmd_adopt(cfg, env, args):
+    from keyremap.adopt import run
+    return run(cfg, device=args.device, index=args.index,
+               apply_changes=not args.dry_run)
+
+
 def cmd_export(cfg, env, args):
     from keyremap.portable import export_bundle
     path = export_bundle(cfg, args.out)
@@ -205,6 +212,10 @@ def main():
     sub.add_parser("check")
     sub.add_parser("doctor")
     sub.add_parser("selftest")
+    adp = sub.add_parser("adopt")
+    adp.add_argument("--device", help="config device name (default: the first)")
+    adp.add_argument("--index", type=int, help="which listed device to adopt")
+    adp.add_argument("--dry-run", action="store_true")
     ap = sub.add_parser("apply")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--mode", choices=["interception", "heuristic"],
@@ -222,7 +233,7 @@ def main():
     return {
         "tui": cmd_tui, "gui": cmd_gui, "detect": cmd_detect, "listen": cmd_listen,
         "check": cmd_check, "doctor": cmd_doctor, "apply": cmd_apply,
-        "selftest": cmd_selftest,
+        "selftest": cmd_selftest, "adopt": cmd_adopt,
         "export": cmd_export, "import": cmd_import,
     }[cmd](cfg, env, args)
 

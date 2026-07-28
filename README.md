@@ -3,7 +3,7 @@
 <img src="assets/banner.svg" width="100%" alt="keyremap — one keyboard, remapped. Every computer, the same.">
 
 [![ci](https://github.com/fire17/keyremap/actions/workflows/ci.yml/badge.svg)](https://github.com/fire17/keyremap/actions/workflows/ci.yml)
-[![tests](https://img.shields.io/badge/tests-70%20passing-5ddba4)](tests/test_keyremap.py)
+[![tests](https://img.shields.io/badge/tests-85%20passing-5ddba4)](tests/test_keyremap.py)
 [![dependencies](https://img.shields.io/badge/dependencies-none-5ddba4)](#-quickstart)
 [![platforms](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-verified%20in%20CI-5cc8ff)](.github/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -46,7 +46,7 @@ configuration problem, it's an interception problem.
 ## ⚡ Quickstart
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/fire17/keyremap/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/fire17/keyremap/HEAD/install.sh | sh
 keyremap selftest     # proves the install is sound on THIS machine
 keyremap apply        # build, deploy, and switch it on
 ```

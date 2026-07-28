@@ -1,13 +1,13 @@
 #!/bin/sh
 # keyremap installer — macOS / Linux / WSL. Idempotent, no sudo, no pip.
 #
-#   curl -fsSL https://raw.githubusercontent.com/fire17/keyremap/master/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/fire17/keyremap/HEAD/install.sh | sh
 #   ./install.sh              # from a clone
 #
 # Installs to ~/.keyremap/app and puts a `keyremap` launcher on your PATH.
 set -e
 
-REPO_RAW="${KEYREMAP_RAW:-https://raw.githubusercontent.com/fire17/keyremap/master}"
+REPO_RAW="${KEYREMAP_RAW:-https://raw.githubusercontent.com/fire17/keyremap/HEAD}"
 APP="$HOME/.keyremap/app"
 BIN_DIR="${KEYREMAP_BIN:-$HOME/.local/bin}"
 SRC_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null && pwd || echo .)"

@@ -899,3 +899,37 @@ class TestInstallManifest(unittest.TestCase):
             sh = f.read()
         self.assertIn("install-manifest.txt", sh)
         self.assertNotIn("keyremap/tui/term.py\"", sh)   # the old inline list
+
+
+class TestDocsMatchReality(unittest.TestCase):
+    """The README's first command is the first thing a stranger runs; a wrong
+    branch in that URL 404s for everyone (it did)."""
+
+    def setUp(self):
+        self.root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(self.root, "README.md")) as f:
+            self.readme = f.read()
+
+    def test_install_urls_are_branch_agnostic(self):
+        import re
+        bad = re.findall(
+            r"raw\.githubusercontent\.com/[\w-]+/[\w-]+/(main|master)/", self.readme)
+        self.assertEqual(bad, [], "pin install URLs to HEAD, not a branch name")
+
+    def test_no_placeholder_owner_in_a_url(self):
+        """Prose may mention the old bug; a live URL may not contain it."""
+        for name in ("README.md", "install.sh"):
+            with open(os.path.join(self.root, name)) as f:
+                text = f.read()
+            self.assertNotIn("githubusercontent.com/OWNER", text,
+                             f"{name} has a placeholder in a real URL")
+
+    def test_tests_badge_matches_the_real_count(self):
+        import re
+        m = re.search(r"tests-(\d+)%20passing", self.readme)
+        self.assertIsNotNone(m, "tests badge missing")
+        claimed = int(m.group(1))
+        loader = unittest.TestLoader()
+        actual = loader.discover(os.path.join(self.root, "tests")).countTestCases()
+        self.assertEqual(claimed, actual,
+                         f"README claims {claimed} tests, suite has {actual}")

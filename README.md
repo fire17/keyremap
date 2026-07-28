@@ -277,7 +277,8 @@ This project exists because "just remap the keypad" turned out to be three opera
 kernel filter driver, and seven bugs that only appeared when the code actually ran. If that story
 is useful to you, a star is how it finds the next person carrying a keypad between machines.
 
-[![Star History Chart](https://api.star-history.com/svg?repos=fire17/keyremap&type=Date)](https://star-history.com/#fire17/keyremap&Date)
+<sub>[★ star history](https://star-history.com/#fire17/keyremap&Date) — the chart appears once
+there is history to chart.</sub>
 
 ---
 

@@ -107,6 +107,24 @@ class Config:
         return {n: d.fingerprint for n, d in self.devices.items()}
 
 
+def parse_text(text: str, path: str = ""):
+    """Parse a config document: JSON, or YAML via pyyaml, else the built-in reader.
+
+    A fresh machine has no pyyaml, so YAML must still work out of the box —
+    otherwise the first thing a new user meets is a JSONDecodeError on their
+    perfectly valid config (observed on a clean Windows Python).
+    """
+    stripped = text.lstrip()
+    if stripped.startswith(("{", "[")) or path.endswith(".json"):
+        return json.loads(text) or {}
+    try:
+        import yaml
+        return yaml.safe_load(text) or {}
+    except ImportError:
+        from . import miniyaml
+        return miniyaml.safe_load(text) or {}
+
+
 def _to_int(v) -> int | None:
     if v is None:
         return None
@@ -200,11 +218,7 @@ def resolve_layers(layers: dict[str, dict], plat: str, host: str
 def load(path: str, plat: str | None = None, host: str | None = None) -> Config:
     with open(path) as f:
         text = f.read()
-    try:
-        import yaml
-        raw = yaml.safe_load(text) or {}
-    except ImportError:
-        raw = json.loads(text)
+    raw = parse_text(text, path)
 
     if plat is None or host is None:
         cur_plat, cur_host = current_env()

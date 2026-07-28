@@ -115,24 +115,43 @@ class Gui:
                                 font=_font(10), anchor="e")
         self.eng_lbl.pack(side="right")
 
-        # notebook
+        # tabs — hand-rolled so no theme draws its own borders
         style = self.ttk.Style()
         try:
             style.theme_use("clam")
         except Exception:  # noqa: BLE001
             pass
-        style.configure("TNotebook", background=BG, borderwidth=0)
-        style.configure("TNotebook.Tab", background=BG2, foreground=MUTED,
-                        padding=(16, 8), borderwidth=0)
-        style.map("TNotebook.Tab", background=[("selected", BG3)],
-                  foreground=[("selected", ACCENT)])
 
-        nb = self.ttk.Notebook(self.root)
-        nb.pack(fill="both", expand=True, padx=12, pady=(10, 6))
-        self.nb = nb
-        self.tab_map = self._tab_mappings(nb)
-        self.tab_cap = self._tab_capture(nb)
-        self.tab_doc = self._tab_doctor(nb)
+        # NOTE: tuple padding is a pack/grid option, not a widget option —
+        # tk.Frame(pady=(12, 0)) raises TclError: bad screen distance.
+        tabbar = tk.Frame(self.root, bg=BG)
+        tabbar.pack(fill="x", padx=14, pady=(12, 0))
+        self.body = tk.Frame(self.root, bg=BG)
+        self.body.pack(fill="both", expand=True, padx=14, pady=10)
+
+        self.panes, self.tab_buttons = {}, {}
+        for key, label in (("map", "Mappings"), ("cap", "Capture"),
+                           ("doc", "Doctor")):
+            b = tk.Button(tabbar, text=label, relief="flat", bd=0,
+                          highlightthickness=0, cursor="hand2", padx=16, pady=7,
+                          bg=BG, fg=MUTED, activebackground=BG3,
+                          activeforeground=ACCENT, font=_font(11),
+                          command=lambda k=key: self.show(k))
+            b.pack(side="left", padx=(0, 4))
+            self.tab_buttons[key] = b
+            pane = tk.Frame(self.body, bg=BG2)
+            self.panes[key] = pane
+
+        self.map_tree = self._tree(self.panes["map"],
+                                   ("key", "does", "layer", "scancode"),
+                                   (150, 400, 150, 120))
+        self._build_capture(self.panes["cap"])
+        self.doc_tree = self._tree(self.panes["doc"], ("check", "result", "fix"),
+                                   (250, 320, 400))
+        self.doc_tree.tag_configure("ok", foreground=GOOD)
+        self.doc_tree.tag_configure("warn", foreground=WARN)
+        self.doc_tree.tag_configure("fail", foreground=BAD)
+        self.show("map")
 
         # action bar
         bar = tk.Frame(self.root, bg=BG, padx=14, pady=10)
@@ -158,8 +177,10 @@ class Gui:
     def _tree(self, parent, columns, widths):
         style = self.ttk.Style()
         style.configure("kr.Treeview", background=BG2, fieldbackground=BG2,
-                        foreground=FG, borderwidth=0, rowheight=26,
-                        font=_font(10))
+                        foreground=FG, borderwidth=0, relief="flat",
+                        rowheight=27, font=_font(10))
+        style.layout("kr.Treeview", [("kr.Treeview.treearea",
+                                      {"sticky": "nswe"})])  # drop the border
         style.configure("kr.Treeview.Heading", background=BG3, foreground=MUTED,
                         borderwidth=0, font=_font(9, "bold"))
         style.map("kr.Treeview", background=[("selected", BG3)],
@@ -169,45 +190,34 @@ class Gui:
         for c, w in zip(columns, widths):
             t.heading(c, text=c.upper())
             t.column(c, width=w, anchor="w")
-        t.pack(fill="both", expand=True, padx=8, pady=8)
+        t.pack(fill="both", expand=True, padx=10, pady=10)
         return t
 
-    def _tab_mappings(self, nb):
-        f = self.tk.Frame(nb, bg=BG)
-        nb.add(f, text="Mappings")
-        self.map_tree = self._tree(f, ("key", "does", "layer", "scancode"),
-                                   (140, 380, 140, 110))
-        return f
+    def show(self, key):
+        for k, pane in self.panes.items():
+            pane.pack_forget()
+            self.tab_buttons[k].configure(
+                bg=BG3 if k == key else BG,
+                fg=ACCENT if k == key else MUTED)
+        self.panes[key].pack(fill="both", expand=True)
 
-    def _tab_capture(self, nb):
-        f = self.tk.Frame(nb, bg=BG)
-        nb.add(f, text="Capture")
-        top = self.tk.Frame(f, bg=BG, padx=8, pady=8)
+    def _build_capture(self, f):
+        tk = self.tk
+        top = tk.Frame(f, bg=BG2, padx=10, pady=10)
         top.pack(fill="x")
-        self.cap_btn = self.tk.Button(
+        self.cap_btn = tk.Button(
             top, text="Start capture", command=self.toggle_capture, relief="flat",
             bg=BG3, fg=FG, font=_font(10), padx=12, pady=5, bd=0,
             highlightthickness=0, cursor="hand2")
         self.cap_btn.pack(side="left")
-        self.tk.Label(top, text="  press keys on the device to learn their codes",
-                      bg=BG, fg=MUTED, font=_font(10)).pack(side="left")
-        self.cap_text = self.tk.Text(f, bg=BG2, fg=FG, insertbackground=FG,
-                                     font=_font(10), relief="flat", height=18,
-                                     padx=10, pady=8)
-        self.cap_text.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+        tk.Label(top, text="  press keys on the device to learn their codes",
+                 bg=BG2, fg=MUTED, font=_font(10)).pack(side="left")
+        self.cap_text = tk.Text(f, bg=BG2, fg=FG, insertbackground=FG,
+                                font=_font(10), relief="flat", height=18,
+                                padx=10, pady=6, bd=0, highlightthickness=0)
+        self.cap_text.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         self.cap_text.tag_configure("hit", foreground=GOOD)
         self.cap_text.tag_configure("other", foreground=MUTED)
-        return f
-
-    def _tab_doctor(self, nb):
-        f = self.tk.Frame(nb, bg=BG)
-        nb.add(f, text="Doctor")
-        self.doc_tree = self._tree(f, ("check", "result", "fix"),
-                                   (240, 300, 380))
-        self.doc_tree.tag_configure("ok", foreground=GOOD)
-        self.doc_tree.tag_configure("warn", foreground=WARN)
-        self.doc_tree.tag_configure("fail", foreground=BAD)
-        return f
 
     # --------------------------------------------------------------- helpers
     def _mtime(self):
@@ -249,7 +259,7 @@ class Gui:
         for status, label, detail, fix in rows:
             self.doc_tree.insert("", "end", values=(label, detail, fix),
                                  tags=(status,))
-        self.nb.select(self.tab_doc)
+        self.show("doc")
         self.say("doctor complete")
 
     def do_apply(self):

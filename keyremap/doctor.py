@@ -34,10 +34,9 @@ def _check_python():
 def _check_yaml():
     try:
         import yaml  # noqa: F401
-        return OK, "YAML parser", "pyyaml present", ""
+        return OK, "YAML parser", "pyyaml", ""
     except ImportError:
-        return (WARN, "YAML parser", "pyyaml missing",
-                "pip install pyyaml   (or use config.json instead)")
+        return OK, "YAML parser", "built-in reader (no pyyaml needed)", ""
 
 
 def _checks_macos(cfg):

@@ -63,18 +63,25 @@ def import_bundle(path: str, dest_dir: str, filename: str = "config.yaml") -> st
         backup = dest + time.strftime(".bak-%Y%m%d-%H%M%S")
         os.replace(dest, backup)
 
-    try:
-        import yaml
-        text = yaml.safe_dump(doc, sort_keys=False, allow_unicode=True)
-    except ImportError:
-        dest = os.path.join(dest_dir, "config.json")
+    # The destination extension decides the format — writing YAML into a
+    # .json file (or vice versa) produces a config nothing can read.
+    want_json = dest.endswith(".json")
+    if not want_json:
+        try:
+            import yaml
+            text = yaml.safe_dump(doc, sort_keys=False, allow_unicode=True)
+        except ImportError:
+            from . import miniyaml  # noqa: F401  (reader only, no writer)
+            want_json = True        # fall back to a format we can always write
+            dest = os.path.splitext(dest)[0] + ".json"
+    if want_json:
         text = json.dumps(doc, indent=2)
 
     header = (f"# imported from {data['exported_from']['host']} "
               f"({data['exported_from']['platform']}) "
               f"on {data['exported_at']}\n")
     with open(dest, "w") as f:
-        if dest.endswith((".yaml", ".yml")):
-            f.write(header)
+        if not want_json:
+            f.write(header)   # JSON has no comments
         f.write(text)
     return dest

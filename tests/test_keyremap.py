@@ -496,3 +496,84 @@ class TestValidatorCatchesRealBugs(unittest.TestCase):
         self.assertEqual(self.v.validate_karabiner(mac.generate(cfg)), [])
         cfgw = cfgmod.load(write_cfg(BASE_DOC), plat="windows", host="x")
         self.assertEqual(self.v.validate_ahk(win.generate_interception(cfgw)), [])
+
+
+class TestMiniYaml(unittest.TestCase):
+    """The built-in reader must agree with pyyaml on configs we ship."""
+
+    def test_matches_pyyaml_on_the_real_config(self):
+        try:
+            import yaml
+        except ImportError:
+            self.skipTest("pyyaml not installed")
+        from keyremap import miniyaml
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        text = open(os.path.join(here, "config.yaml")).read()
+        self.assertEqual(miniyaml.safe_load(text), yaml.safe_load(text))
+
+    def test_scalars_and_structures(self):
+        from keyremap import miniyaml
+        doc = miniyaml.safe_load("""
+# a comment
+version: 2
+devices:
+  kp:
+    match: { vendor_id: 0x045E, product_id: 64 }
+profiles:
+  base:
+    kp:
+      esc: home
+      home:
+        tap: accel+a
+        hold: [accel+a, accel+c]
+        hold_ms: 400
+      tab: null
+  os:
+    darwin: {}
+flag: true
+name: "quoted: string"
+""")
+        self.assertEqual(doc["version"], 2)
+        self.assertEqual(doc["devices"]["kp"]["match"]["vendor_id"], 0x045E)
+        self.assertEqual(doc["profiles"]["base"]["kp"]["home"]["hold"],
+                         ["accel+a", "accel+c"])
+        self.assertIsNone(doc["profiles"]["base"]["kp"]["tab"])
+        self.assertEqual(doc["profiles"]["os"]["darwin"], {})
+        self.assertIs(doc["flag"], True)
+        self.assertEqual(doc["name"], "quoted: string")
+
+    def test_config_loads_without_pyyaml(self):
+        """Simulate a fresh Mac: no pyyaml installed."""
+        import builtins
+        from keyremap import config as c
+        real_import = builtins.__import__
+
+        def no_yaml(name, *a, **k):
+            if name == "yaml":
+                raise ImportError("simulated: pyyaml not installed")
+            return real_import(name, *a, **k)
+
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        builtins.__import__ = no_yaml
+        try:
+            cfg = c.load(os.path.join(here, "config.yaml"),
+                         plat="darwin", host="mac")
+        finally:
+            builtins.__import__ = real_import
+        self.assertTrue(cfg.mappings["keypad"])
+        self.assertEqual(cfg.devices["keypad"].vendor_id, 0x045E)
+
+    def test_unsupported_features_raise_rather_than_guess(self):
+        from keyremap.miniyaml import YamlError, safe_load
+        with self.assertRaises(YamlError):
+            safe_load("a: &anchor 1\n")
+
+
+class TestImportFormat(unittest.TestCase):
+    def test_json_destination_gets_json(self):
+        cfg = cfgmod.load(write_cfg(BASE_DOC), plat="linux", host="x")
+        with tempfile.TemporaryDirectory() as d:
+            b = portable.export_bundle(cfg, os.path.join(d, "b.keyremap"))
+            dest = portable.import_bundle(b, d, filename="config.json")
+            self.assertTrue(dest.endswith(".json"))
+            json.load(open(dest))  # must be valid JSON

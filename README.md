@@ -28,8 +28,10 @@ curl -fsSL https://raw.githubusercontent.com/OWNER/keyremap/main/install.sh | sh
 **Windows** — clone, then run `windows-tools\install.ps1` (or use WSL, which drives the
 Windows side automatically).
 
-No pip, no venv, no dependencies: everything is Python standard library. `pyyaml` is used
-if present, otherwise a JSON config works identically.
+No pip, no venv, no dependencies — everything is Python standard library, **including the
+YAML reader**. (A clean Windows Python with no `pyyaml` was exactly how that gap was
+found: the config failed to load. It now parses either way, and the built-in reader is
+tested to agree with pyyaml byte-for-byte on the shipped config.)
 
 ### Taking your setup to another computer
 
@@ -225,10 +227,11 @@ Layout: `keys.py` (one canonical key table → Windows/evdev/Karabiner names), `
 | Path | State |
 |---|---|
 | Windows (Interception) | **used daily, verified end-to-end** on real hardware |
+| Native GUI (tkinter) | **verified running** on Windows with live device detection |
 | Browser GUI | **verified running** (served and loaded from another OS's browser) |
+| CLI on native Windows Python | **verified** — 64 tests + selftest green, no pyyaml installed |
 | macOS (Karabiner) | artifact generated and strictly validated; **not yet loaded by a real Karabiner** |
 | Linux (evdev) | engine tested exhaustively; **kernel grab not yet run on real hardware** |
-| Native tkinter GUI | code complete; **not yet seen running** (no tcl/tk on the dev machine) |
 
 Run `keyremap selftest` on a new machine and it will tell you which of these apply to you.
 

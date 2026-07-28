@@ -83,6 +83,7 @@ class Gui:
         self.events = queue.Queue()
         self.capture_stop = threading.Event()
         self.capture_thread = None
+        self._status_thread = None      # one at a time; see _poll
         self._cfg_mtime = self._mtime()
 
         root.title("keyremap")
@@ -334,11 +335,18 @@ class Gui:
         if self._mtime() != self._cfg_mtime:  # hot reload
             self.reload_config()
 
-        def worker():
-            st = state.gather(self.cfg, quick=True)
-            self.root.after(0, lambda: self._show_status(st))
+        # If the previous refresh is still running (a slow or hung platform
+        # helper), skip this tick rather than stacking a thread every 1.5s.
+        if self._status_thread is None or not self._status_thread.is_alive():
+            def worker():
+                try:
+                    st = state.gather(self.cfg, quick=True)
+                except Exception:  # noqa: BLE001 - a status probe must not kill the UI
+                    return
+                self.root.after(0, lambda: self._show_status(st))
 
-        threading.Thread(target=worker, daemon=True).start()
+            self._status_thread = threading.Thread(target=worker, daemon=True)
+            self._status_thread.start()
         self.root.after(1500, self._poll)
 
     def _show_status(self, st):

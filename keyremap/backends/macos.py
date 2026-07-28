@@ -21,7 +21,8 @@ from ..keys import KEYS, KB_MOD_NAME
 def detect(cfg: Config) -> list[dict]:
     out = []
     try:
-        r = subprocess.run(["hidutil", "list"], capture_output=True, text=True)
+        r = subprocess.run(["hidutil", "list"], capture_output=True,
+                           text=True, timeout=15)
         for line in r.stdout.splitlines():
             parts = line.split()
             if len(parts) < 3 or not parts[0].startswith("0x"):
@@ -35,8 +36,8 @@ def detect(cfg: Config) -> list[dict]:
                        if dm.matches(vid, pid, name)]
             out.append({"name": name, "instance": line.strip(), "vid": vid,
                         "pid": pid, "matches": matched})
-    except FileNotFoundError:
-        pass
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass          # no hidutil, or it hung — report nothing, never block
     return out
 
 

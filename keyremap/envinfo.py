@@ -29,7 +29,7 @@ def windows_temp_dir() -> str:
     import subprocess
     out = subprocess.run(
         ["powershell.exe", "-NoProfile", "-Command", "$env:TEMP"],
-        capture_output=True, text=True, check=True,
+        capture_output=True, text=True, check=True, timeout=20,
     ).stdout.strip()
     # C:\Users\X\AppData\Local\Temp -> /mnt/c/Users/X/AppData/Local/Temp
     drive = out[0].lower()

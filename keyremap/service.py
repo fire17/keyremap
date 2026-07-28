@@ -62,7 +62,7 @@ def _windows(cfg, dry: bool) -> int:
     if _say(["powershell.exe", "-NoProfile", "-Command", "<register task>"], dry):
         return 0
     r = subprocess.run(["powershell.exe", "-NoProfile", "-Command", ps],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, timeout=60)
     print("  " + (r.stdout or r.stderr).strip())
     return r.returncode
 
@@ -99,7 +99,7 @@ def _linux(cfg, dry: bool) -> int:
     for cmd in (["systemctl", "--user", "daemon-reload"],
                 ["systemctl", "--user", "enable", "--now", "keyremap.service"]):
         _say(cmd, False)
-        subprocess.run(cmd)
+        subprocess.run(cmd, timeout=60)
     print("\nkeyremap will now start at login and restart if it dies.")
     print("  status: systemctl --user status keyremap")
     print("  stop:   systemctl --user disable --now keyremap")

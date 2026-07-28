@@ -21,8 +21,11 @@ ASSETS = os.path.join(os.path.dirname(__file__), "..", "..", "assets")
 
 
 def _ps(args: list[str], **kw) -> subprocess.CompletedProcess:
+    """Always bounded: an unbounded PowerShell call froze the TUI's status
+    refresh and let the GUI stack a new thread behind it every 1.5 seconds."""
+    timeout = kw.pop("timeout", 20)
     return subprocess.run(["powershell.exe", "-NoProfile", *args],
-                          capture_output=True, text=True, **kw)
+                          capture_output=True, text=True, timeout=timeout, **kw)
 
 
 def ps(args: list[str], timeout: int = 20) -> tuple[int, str]:
@@ -74,10 +77,13 @@ def _stage_script(name: str) -> str:
 
 
 def detect(cfg: Config) -> list[dict]:
-    r = _ps(["-Command",
+    try:
+        r = _ps(["-Command",
              "Get-PnpDevice | Where-Object { ($_.Class -eq 'Keyboard' -or "
              "$_.FriendlyName -match 'keypad|keyboard') -and $_.Status -eq 'OK' } | "
              "ForEach-Object { $_.FriendlyName + '|' + $_.InstanceId }"])
+    except subprocess.TimeoutExpired:
+        return []                     # hung helper: report nothing, never hang
     devices = []
     for line in r.stdout.splitlines():
         if "|" not in line:

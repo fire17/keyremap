@@ -1538,3 +1538,74 @@ class TestDemoAsset(unittest.TestCase):
     def test_animates_without_javascript(self):
         self.assertIn("<animate", self.svg)
         self.assertIn('repeatCount="indefinite"', self.svg)
+
+
+class TestNoResourceLeaks(unittest.TestCase):
+    """'No leaks of any kind' includes resources: a hung platform helper must
+    not freeze a UI or let threads pile up behind it."""
+
+    def test_every_status_subprocess_is_bounded(self):
+        """An unbounded subprocess in a status path can hang a UI forever."""
+        import ast
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        offenders = []
+        for base, dirs, names in os.walk(os.path.join(root, "keyremap")):
+            dirs[:] = [d for d in dirs if d != "__pycache__"]
+            for n in names:
+                if not n.endswith(".py"):
+                    continue
+                p = os.path.join(base, n)
+                with open(p, encoding="utf-8") as f:
+                    tree = ast.parse(f.read(), filename=p)
+                for node in ast.walk(tree):
+                    if not (isinstance(node, ast.Call)
+                            and isinstance(node.func, ast.Attribute)
+                            and node.func.attr == "run"
+                            and isinstance(node.func.value, ast.Name)
+                            and node.func.value.id == "subprocess"):
+                        continue
+                    kw = {k.arg for k in node.keywords}
+                    # setup.py runs user-approved installers that legitimately
+                    # take minutes; everything else must be bounded.
+                    if "timeout" not in kw and not p.endswith("setup.py"):
+                        offenders.append(f"{os.path.relpath(p, root)}:{node.lineno}")
+        self.assertEqual(sorted(offenders), [],
+                         "unbounded subprocess.run in a status path")
+
+    def test_detect_survives_a_hung_helper(self):
+        import subprocess
+        from keyremap.backends import windows as be
+        real = subprocess.run
+
+        def hang(*a, **k):
+            raise subprocess.TimeoutExpired(cmd="x", timeout=1)
+
+        cfg = cfgmod.load(write_cfg(BASE_DOC), plat="windows", host="x")
+        subprocess.run = hang
+        try:
+            self.assertEqual(be.detect(cfg), [])   # reports nothing, no raise
+        finally:
+            subprocess.run = real
+
+    def test_gui_polls_without_stacking_threads(self):
+        """The GUI must skip a tick rather than start a second refresh."""
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(here, "keyremap", "gui.py"), encoding="utf-8") as f:
+            src = f.read()
+        self.assertIn("_status_thread", src)
+        self.assertIn("is_alive()", src)
+
+    def test_engine_state_does_not_grow_unbounded(self):
+        """Thousands of presses must not accumulate state."""
+        from keyremap.config import Action
+        from keyremap.engine import Engine
+        act = Action(tap=[([], "a")], hold=[([], "home")], hold_ms=10)
+        e = Engine({1: act})
+        for i in range(5000):
+            e.feed(1, 1, i)
+            e.due(i + 20)
+            e.feed(1, 0, i + 30)
+        self.assertLessEqual(len(e._pending), 1)
+        self.assertLessEqual(len(e._down), 1)
+        self.assertLessEqual(len(e._hold_fired), 1)
+        self.assertEqual(e.release_all(), [])

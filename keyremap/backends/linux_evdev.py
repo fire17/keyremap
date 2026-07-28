@@ -6,6 +6,7 @@ backend is used via interop). Requires: pip install evdev, and read access to
 """
 
 from ..config import Config
+from ..engine import Engine, HOLD_DOWN, HOLD_UP, PASS, TAP
 from ..keys import KEYS, EV_MOD_NAME
 
 
@@ -99,81 +100,52 @@ def run(cfg: Config):
         raise SystemExit("no configured device found - check `remap.py detect`")
 
     ui = UInput()  # all standard keys
+    engine = Engine(table={}, passthrough=cfg.passthrough_unmapped)
 
-    def tap(target):
-        """Press and release a (mods, key) target."""
-        mods, dst = target
+    def emit(out):
+        """Turn engine decisions into uinput writes."""
+        if out.kind == PASS:
+            if out.raw is not None:
+                ui.write_event(out.raw)
+                ui.syn()
+            return
+        mods, dst = out.target
         code = ev_of[dst]
-        for m in mods:
-            ui.write(ecodes.EV_KEY, ev_of[m], 1)
-        ui.write(ecodes.EV_KEY, code, 1)
-        ui.write(ecodes.EV_KEY, code, 0)
-        for m in reversed(mods):
-            ui.write(ecodes.EV_KEY, ev_of[m], 0)
+        if out.kind == TAP:
+            for m in mods:
+                ui.write(ecodes.EV_KEY, ev_of[m], 1)
+            ui.write(ecodes.EV_KEY, code, 1)
+            ui.write(ecodes.EV_KEY, code, 0)
+            for m in reversed(mods):
+                ui.write(ecodes.EV_KEY, ev_of[m], 0)
+        elif out.kind == HOLD_DOWN:
+            ui.write(ecodes.EV_KEY, code, 1)
+        elif out.kind == HOLD_UP:
+            ui.write(ecodes.EV_KEY, code, 0)
         ui.syn()
-
-    # source code -> (deadline, Action) for a pending hold
-    pending: dict[int, tuple[float, object]] = {}
-    held: set[int] = set()        # physically down (auto-repeat guard)
-    hold_fired: set[int] = set()  # hold ran; suppress tap on release
 
     try:
         while True:
-            now = time.monotonic()
-            # fire any hold actions whose deadline passed
-            for code in [c for c, (dl, _) in pending.items() if dl <= now]:
-                _, act_due = pending.pop(code)
-                hold_fired.add(code)
-                for t in act_due.hold:
-                    tap(t)
-            timeout = min((dl - now for dl, _ in pending.values()), default=None)
+            now = time.monotonic() * 1000.0
+            for out in engine.due(now):
+                emit(out)
+            deadline = engine.next_deadline()
+            timeout = max(0.0, (deadline - now) / 1000.0) if deadline else None
             r, _, _ = select.select(list(grabbed), [], [], timeout)
+            now = time.monotonic() * 1000.0
             for fd in r:
                 d, table = grabbed[fd]
+                engine.table = table          # per-device mapping table
                 for ev in d.read():
-                    if ev.type != ecodes.EV_KEY or ev.code not in table:
-                        if cfg.passthrough_unmapped or ev.type != ecodes.EV_KEY:
-                            ui.write_event(ev)
-                            ui.syn()
+                    if ev.type != ecodes.EV_KEY:
+                        ui.write_event(ev)     # sync/misc events pass straight
+                        ui.syn()
                         continue
-                    act = table[ev.code]
-                    if act is None:  # swallowed (numlock quirk)
-                        continue
-                    if not act.is_simple:
-                        if ev.value == 1:
-                            if ev.code in pending or ev.code in held:
-                                continue  # auto-repeat
-                            held.add(ev.code)
-                            for t in (act.press or []):
-                                tap(t)
-                            if act.hold is not None:
-                                pending[ev.code] = (
-                                    time.monotonic() + act.hold_ms / 1000, act)
-                        elif ev.value == 0:
-                            held.discard(ev.code)
-                            was_pending = pending.pop(ev.code, None) is not None
-                            fired = ev.code in hold_fired
-                            hold_fired.discard(ev.code)
-                            # tap fires only if the hold never fired
-                            if act.tap is not None and not fired and (
-                                    was_pending or act.hold is None):
-                                for t in act.tap:
-                                    tap(t)
-                        continue
-                    mods, dst = act.press[0]
-                    dst_code = ev_of[dst]
-                    if ev.value == 1:  # down: press mods, then key
-                        for m in mods:
-                            ui.write(ecodes.EV_KEY, ev_of[m], 1)
-                        ui.write(ecodes.EV_KEY, dst_code, 1)
-                    elif ev.value == 0:  # up: release key, then mods
-                        ui.write(ecodes.EV_KEY, dst_code, 0)
-                        for m in reversed(mods):
-                            ui.write(ecodes.EV_KEY, ev_of[m], 0)
-                    else:  # repeat
-                        ui.write(ecodes.EV_KEY, dst_code, 2)
-                    ui.syn()
+                    for out in engine.feed(ev.code, ev.value, now, raw=ev):
+                        emit(out)
     finally:
+        for out in engine.release_all():
+            emit(out)
         for d, _ in grabbed.values():
             try:
                 d.ungrab()

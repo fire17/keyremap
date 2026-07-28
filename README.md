@@ -9,8 +9,9 @@ without forking the base.
 
 ```
 keyremap            # the control room (TUI)
-keyremap gui        # the desktop app
+keyremap gui        # the desktop app (native window, or browser UI)
 keyremap doctor     # what this machine still needs, and the exact fix
+keyremap selftest   # prove the install is sound here, before you trust it
 keyremap apply      # build + deploy for this OS
 ```
 
@@ -181,22 +182,55 @@ AutoHotInterception marks E0-extended with `0x100` — not `0x200`.
 
 ---
 
-## Development
+## How it's verified
 
-```sh
-python3 -m unittest discover -s tests -v     # 42 tests, ~0.04s
-keyremap check                               # validate config against ALL backends
+The part that can actually be *wrong* is the decision logic — what a press, release,
+repeat or hold should emit. That lives in `engine.py` as a pure function of events, with
+no OS in the way, so it is tested exhaustively on any machine; the Linux backend is a thin
+shell around it, and Windows/macOS delegate the same contract to AutoHotkey timers and
+Karabiner's `to_if_alone` / `to_if_held_down`.
+
+Everything else is checked by **strict artifact validation**. `keyremap selftest`
+generates the real output for all three platforms and validates it against each one's
+actual vocabulary — so a mistake is caught on the machine you're standing at, not on the
+machine you're flying to:
+
+```
+keyremap selftest
+
+  ✓ engine semantics                  tap/hold/repeat/modifier contract (simulated)
+  ✓ artifact: macOS (Karabiner)       generated + validated
+  ✓ artifact: Windows (AutoHotkey)    generated + validated
+  ✓ artifact: Linux (evdev)           generated + validated
+  ✓ export/import round-trip          same behaviour after moving machines
+  ✓ …environment checks…
+  ALL GREEN — safe to apply on this machine.
 ```
 
-The codebase is small on purpose: `keys.py` (one canonical key table mapping every key to
-its Windows/evdev/Karabiner name), `config.py` (layering + validation), `backends/`
-(one file per platform), `tui/` and `gui.py` (thin views over shared pure helpers).
+The validators have negative tests proving they *fail* on the bugs that actually bit this
+project: an invented Karabiner `key_code`, a manipulator with **no `device_if`** (which
+would silently remap every keyboard on the Mac), an AHK `Map.Delete` on a state map, and
+`GetKeyboardId()` on a Bluetooth device.
 
-## Status
+```sh
+python3 -m unittest discover -s tests -v     # 59 tests, ~0.07s
+```
 
-Windows/Interception is used daily and verified end-to-end. The macOS and Linux backends
-generate correct, schema-verified output and are covered by tests, but have not yet been
-run against real hardware.
+Layout: `keys.py` (one canonical key table → Windows/evdev/Karabiner names), `config.py`
+(layering + validation), `engine.py` (the semantics), `backends/` (one per platform),
+`validate.py`, `tui/` and `gui.py` + `webgui.py` (thin views over shared pure helpers).
+
+## Status — honestly
+
+| Path | State |
+|---|---|
+| Windows (Interception) | **used daily, verified end-to-end** on real hardware |
+| Browser GUI | **verified running** (served and loaded from another OS's browser) |
+| macOS (Karabiner) | artifact generated and strictly validated; **not yet loaded by a real Karabiner** |
+| Linux (evdev) | engine tested exhaustively; **kernel grab not yet run on real hardware** |
+| Native tkinter GUI | code complete; **not yet seen running** (no tcl/tk on the dev machine) |
+
+Run `keyremap selftest` on a new machine and it will tell you which of these apply to you.
 
 ## License
 

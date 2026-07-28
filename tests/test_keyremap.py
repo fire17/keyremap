@@ -363,3 +363,136 @@ class TestState(unittest.TestCase):
         b = write_cfg(doc2)
         self.assertNotEqual(config_sha(a), config_sha(b))
         self.assertEqual(config_sha(a), config_sha(a))
+
+
+class TestEngine(unittest.TestCase):
+    """The semantics all three platforms must implement."""
+
+    def setUp(self):
+        from keyremap.config import Action
+        from keyremap.engine import Engine
+        self.Action, self.Engine = Action, Engine
+
+    def r(self, outs):
+        return [repr(o) for o in outs]
+
+    def test_simple_remap_fires_on_press(self):
+        e = self.Engine({1: self.Action(press=[([], "end")])})
+        self.assertEqual(self.r(e.feed(1, 1, 0)), ["tap:end"])
+        self.assertEqual(self.r(e.feed(1, 0, 1)), [])
+
+    def test_modifier_is_held_and_ignores_repeat(self):
+        e = self.Engine({2: self.Action(press=[([], "lctrl")])})
+        self.assertEqual(self.r(e.feed(2, 1, 0)), ["down:lctrl"])
+        self.assertEqual(self.r(e.feed(2, 2, 5)), [])      # auto-repeat
+        self.assertEqual(self.r(e.feed(2, 0, 9)), ["up:lctrl"])
+
+    def test_hold_fires_at_threshold_and_suppresses_tap(self):
+        act = self.Action(tap=[(["accel"], "a")],
+                          hold=[(["accel"], "a"), (["accel"], "c")], hold_ms=400)
+        e = self.Engine({3: act})
+        self.assertEqual(self.r(e.feed(3, 1, 0)), [])       # nothing on press
+        self.assertEqual(self.r(e.due(399)), [])
+        self.assertEqual(self.r(e.due(400)), ["tap:accel+a", "tap:accel+c"])
+        self.assertEqual(self.r(e.feed(3, 0, 500)), [])     # tap suppressed
+
+    def test_quick_release_fires_tap_only(self):
+        act = self.Action(tap=[(["accel"], "a")], hold=[([], "home")], hold_ms=400)
+        e = self.Engine({3: act})
+        e.feed(3, 1, 0)
+        self.assertEqual(self.r(e.feed(3, 0, 100)), ["tap:accel+a"])
+        self.assertEqual(self.r(e.due(9999)), [])           # hold was cancelled
+
+    def test_autorepeat_never_restarts_the_hold(self):
+        act = self.Action(tap=[([], "a")], hold=[([], "home")], hold_ms=100)
+        e = self.Engine({3: act})
+        e.feed(3, 1, 0)
+        for t in range(10, 100, 10):
+            self.assertEqual(self.r(e.feed(3, 1, t)), [])   # repeats ignored
+        self.assertEqual(self.r(e.due(100)), ["tap:home"])  # still fires on time
+
+    def test_unmapped_key_passthrough_toggle(self):
+        e = self.Engine({}, passthrough=True)
+        self.assertEqual(self.r(e.feed(99, 1, 0, raw="x")), ["PASS"])
+        self.assertEqual(self.r(self.Engine({}, passthrough=False).feed(99, 1, 0)), [])
+
+    def test_swallowed_key_emits_nothing(self):
+        self.assertEqual(self.r(self.Engine({5: None}).feed(5, 1, 0)), [])
+
+    def test_release_all_frees_held_modifiers(self):
+        e = self.Engine({2: self.Action(press=[([], "lshift")])})
+        e.feed(2, 1, 0)
+        self.assertEqual(self.r(e.release_all()), ["up:lshift"])
+
+    def test_next_deadline_drives_the_caller_timeout(self):
+        act = self.Action(tap=[([], "a")], hold=[([], "home")], hold_ms=400)
+        e = self.Engine({3: act})
+        self.assertIsNone(e.next_deadline())
+        e.feed(3, 1, 1000)
+        self.assertEqual(e.next_deadline(), 1400)
+
+
+class TestValidatorCatchesRealBugs(unittest.TestCase):
+    """A validator that never fails proves nothing — these prove it fails."""
+
+    def setUp(self):
+        from keyremap import validate
+        self.v = validate
+
+    def test_karabiner_rejects_invented_key_code(self):
+        doc = json.dumps({"title": "t", "rules": [{"description": "d",
+            "manipulators": [{"type": "basic", "from": {"key_code": "banana"},
+                "to": [{"key_code": "a"}],
+                "conditions": [{"type": "device_if",
+                                "identifiers": [{"vendor_id": 1}]}]}]}]})
+        self.assertTrue(any("banana" in p for p in self.v.validate_karabiner(doc)))
+
+    def test_karabiner_rejects_missing_device_condition(self):
+        doc = json.dumps({"title": "t", "rules": [{"description": "d",
+            "manipulators": [{"type": "basic", "from": {"key_code": "a"},
+                              "to": [{"key_code": "b"}]}]}]})
+        self.assertTrue(any("device_if" in p
+                            for p in self.v.validate_karabiner(doc)))
+
+    def test_karabiner_rejects_manipulator_that_emits_nothing(self):
+        doc = json.dumps({"title": "t", "rules": [{"description": "d",
+            "manipulators": [{"type": "basic", "from": {"key_code": "a"},
+                "conditions": [{"type": "device_if",
+                                "identifiers": [{"vendor_id": 1}]}]}]}]})
+        self.assertTrue(any("produces nothing" in p
+                            for p in self.v.validate_karabiner(doc)))
+
+    def test_karabiner_rejects_bad_modifier_and_bad_json(self):
+        doc = json.dumps({"title": "t", "rules": [{"description": "d",
+            "manipulators": [{"type": "basic", "from": {"key_code": "a"},
+                "to": [{"key_code": "b", "modifiers": ["left_banana"]}],
+                "conditions": [{"type": "device_if",
+                                "identifiers": [{"vendor_id": 1}]}]}]}]})
+        self.assertTrue(any("left_banana" in p
+                            for p in self.v.validate_karabiner(doc)))
+        self.assertTrue(self.v.validate_karabiner("{not json"))
+
+    def test_ahk_rejects_the_map_delete_bug(self):
+        bad = ('#Requires AutoHotkey v2.0\n'
+               'AHI.SubscribeKey(id, 0x147, true, H)\n'
+               'H(state) {\n  holdFired.Delete("home")\n}\n')
+        self.assertTrue(any("Map.Delete" in p for p in self.v.validate_ahk(bad)))
+
+    def test_ahk_rejects_getkeyboardid_on_ble(self):
+        bad = ('#Requires AutoHotkey v2.0\n'
+               'id := AHI.GetKeyboardId(0x045E, 0x0040)\n'
+               'AHI.SubscribeKey(id, 0x147, true, H)\nH(state) {\n}\n')
+        self.assertTrue(any("GetKeyboardId" in p for p in self.v.validate_ahk(bad)))
+
+    def test_ahk_rejects_missing_handler_and_unbalanced_braces(self):
+        bad = ('#Requires AutoHotkey v2.0\n'
+               'AHI.SubscribeKey(id, 0x147, true, Missing)\n{\n')
+        problems = self.v.validate_ahk(bad)
+        self.assertTrue(any("never defined" in p for p in problems))
+        self.assertTrue(any("unbalanced" in p for p in problems))
+
+    def test_real_generated_artifacts_are_clean(self):
+        cfg = cfgmod.load(write_cfg(BASE_DOC), plat="darwin", host="x")
+        self.assertEqual(self.v.validate_karabiner(mac.generate(cfg)), [])
+        cfgw = cfgmod.load(write_cfg(BASE_DOC), plat="windows", host="x")
+        self.assertEqual(self.v.validate_ahk(win.generate_interception(cfgw)), [])

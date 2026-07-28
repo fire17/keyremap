@@ -115,6 +115,23 @@ jobs:
           print("idempotent on re-apply: 1 rule")
           PY
 
+      - name: doctor runs clean on a real Mac (permission checks included)
+        run: |
+          python remap.py doctor || true      # warnings expected on a runner
+          python - <<'PY'
+          from keyremap.config import load
+          from keyremap import doctor
+          rows = doctor.run(load("config.yaml"))
+          labels = [r[1] for r in rows]
+          for need in ("Karabiner driver extension", "Karabiner engine",
+                       "karabiner_cli lint"):
+              assert need in labels, f"doctor lost the {need!r} check"
+          # nothing may crash, and every row must be a 4-tuple of strings
+          for r in rows:
+              assert len(r) == 4 and all(isinstance(x, str) for x in r), r
+          print("doctor rows:", len(rows))
+          PY
+
       - name: karabiner_cli must still accept the whole config
         run: |
           CLI="/Library/Application Support/org.pqrs/Karabiner-Elements/bin/karabiner_cli"

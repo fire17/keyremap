@@ -51,10 +51,29 @@ def _checks_macos(cfg):
     out.append((OK if ok2 else WARN, "Karabiner config dir",
                 d if ok2 else "not created yet",
                 "" if ok2 else "launch Karabiner-Elements once to create it"))
+    # macOS gates Karabiner behind two approvals that are the #1 reason it
+    # "doesn't work": the driver extension must be activated (System Settings
+    # asks once), and the grabber needs Input Monitoring. Name both explicitly.
+    rc_ext, ext = _run(["systemextensionsctl", "list"])
+    has_ext = rc_ext == 0 and "org.pqrs" in ext
+    activated = has_ext and "activated enabled" in ext.lower()
+    out.append((OK if activated else (WARN if has_ext else FAIL),
+                "Karabiner driver extension",
+                "activated" if activated else
+                ("present but not activated" if has_ext else "not installed"),
+                "" if activated else
+                "System Settings > General > Login Items & Extensions > "
+                "Driver Extensions — enable Karabiner, then reboot if asked"))
+
     rc, _ = _run(["pgrep", "-x", "karabiner_grabber"])
-    out.append((OK if rc == 0 else WARN, "Karabiner engine",
-                "running" if rc == 0 else "not running",
-                "" if rc == 0 else "open Karabiner-Elements and grant Input Monitoring"))
+    rc2, _ = _run(["pgrep", "-x", "karabiner_console_user_server"])
+    both = rc == 0 and rc2 == 0
+    out.append((OK if both else WARN, "Karabiner engine",
+                "grabber + user server running" if both else
+                ("grabber only" if rc == 0 else "not running"),
+                "" if both else
+                "open Karabiner-Elements once and grant Input Monitoring "
+                "(System Settings > Privacy & Security > Input Monitoring)"))
     ok3 = shutil.which("hidutil") is not None
     out.append((OK if ok3 else WARN, "hidutil (device listing)",
                 "present" if ok3 else "missing", ""))

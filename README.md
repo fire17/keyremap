@@ -1,5 +1,9 @@
 # keyremap
 
+[![ci](https://github.com/fire17/keyremap/actions/workflows/ci.yml/badge.svg)](https://github.com/fire17/keyremap/actions/workflows/ci.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![dependencies: none](https://img.shields.io/badge/dependencies-none-brightgreen.svg)](#install)
+
 **Remap one keyboard without touching the others — and take that mapping to any computer.**
 
 Plug a keypad into a Mac, a PC and a Linux box, run one command on each, and all three

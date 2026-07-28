@@ -1476,3 +1476,28 @@ class TestService(unittest.TestCase):
         cp.read_string(text)
         self.assertEqual(cp["Service"]["Restart"], "on-failure")
         self.assertIn("remap.py apply", cp["Service"]["ExecStart"])
+
+
+class TestServiceRobustness(unittest.TestCase):
+    def test_status_commands_survive_missing_binaries(self):
+        """A status command must report, never crash, when a tool is absent —
+        Windows has no pgrep, and CI found this the hard way."""
+        import io, contextlib, subprocess
+        from keyremap import envinfo, service
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        cfg = cfgmod.load(os.path.join(here, "config.yaml"),
+                          plat="darwin", host="mac")
+        real_env, real_run = envinfo.detect, subprocess.run
+
+        def boom(*a, **k):
+            raise FileNotFoundError("no such binary")
+
+        envinfo.detect = lambda: "macos"
+        subprocess.run = boom
+        try:
+            with contextlib.redirect_stdout(io.StringIO()) as buf:
+                code = service.run(cfg, dry_run=True)
+        finally:
+            envinfo.detect, subprocess.run = real_env, real_run
+        self.assertIn("Karabiner engine", buf.getvalue())
+        self.assertIsInstance(code, int)

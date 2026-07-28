@@ -111,8 +111,9 @@ def _macos(cfg, dry: bool) -> int:
     print("macOS needs no service from keyremap: the rule lives inside\n"
           "Karabiner-Elements, which macOS already keeps running and\n"
           "relaunches for you.\n")
-    running = subprocess.run(["pgrep", "-x", "karabiner_grabber"],
-                             capture_output=True).returncode == 0
+    # never let a missing binary crash a status command
+    from . import doctor
+    running = doctor._run(["pgrep", "-x", "karabiner_grabber"])[0] == 0
     print(f"  Karabiner engine: {'running' if running else 'NOT running'}")
     if not running:
         print("  → open Karabiner-Elements once and grant Input Monitoring")

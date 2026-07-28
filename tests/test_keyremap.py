@@ -1259,3 +1259,42 @@ class TestMacNumpadTwins(unittest.TestCase):
         froms = [m["from"]["key_code"] for m in doc["rules"][0]["manipulators"]]
         self.assertEqual(froms.count("tab"), 1)
         self.assertEqual(froms.count("escape"), 1)
+
+
+class TestMacNumlockSwallow(unittest.TestCase):
+    """The keypad toggles NumLock around every nav key. Windows swallows it;
+    macOS must too, or the churn reaches the system and flips NumLock."""
+
+    def _rules(self, swallow=True):
+        doc = json.loads(json.dumps(BASE_DOC))
+        doc["options"] = {"swallow_numlock_quirk": swallow}
+        doc["profiles"] = {"base": {"kp": {"esc": "home"}}}
+        cfg = cfgmod.load(write_cfg(doc), plat="darwin", host="mac")
+        return json.loads(mac.generate(cfg)), cfg
+
+    def test_numlock_is_swallowed_when_the_option_is_on(self):
+        doc, _ = self._rules(True)
+        nl = [m for m in doc["rules"][0]["manipulators"]
+              if m["from"]["key_code"] == "keypad_num_lock"]
+        self.assertEqual(len(nl), 1, "NumLock churn is not swallowed on macOS")
+        self.assertEqual(nl[0]["to"], [{"key_code": "vk_none"}])
+
+    def test_absent_when_the_option_is_off(self):
+        doc, _ = self._rules(False)
+        froms = [m["from"]["key_code"] for m in doc["rules"][0]["manipulators"]]
+        self.assertNotIn("keypad_num_lock", froms)
+
+    def test_swallow_is_scoped_to_the_device(self):
+        """It must never disable NumLock on the built-in keyboard."""
+        doc, _ = self._rules(True)
+        nl = next(m for m in doc["rules"][0]["manipulators"]
+                  if m["from"]["key_code"] == "keypad_num_lock")
+        cond = nl["conditions"][0]
+        self.assertEqual(cond["type"], "device_if")
+        self.assertEqual(cond["identifiers"][0]["vendor_id"], 0x045E)
+
+    def test_still_valid_and_uses_real_codes(self):
+        from keyremap.validate import upstream_key_codes, validate_karabiner
+        doc, _ = self._rules(True)
+        self.assertEqual(validate_karabiner(json.dumps(doc)), [])
+        self.assertIn("vk_none", upstream_key_codes())

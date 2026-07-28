@@ -4,7 +4,7 @@
 
 [![ci](https://github.com/fire17/keyremap/actions/workflows/ci.yml/badge.svg)](https://github.com/fire17/keyremap/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/fire17/keyremap?color=c3a6ff)](https://github.com/fire17/keyremap/releases/latest)
-[![tests](https://img.shields.io/badge/tests-105%20passing-5ddba4)](tests/test_keyremap.py)
+[![tests](https://img.shields.io/badge/tests-109%20passing-5ddba4)](tests/test_keyremap.py)
 [![dependencies](https://img.shields.io/badge/dependencies-none-5ddba4)](#-quickstart)
 [![platforms](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-verified%20in%20CI-5cc8ff)](.github/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -27,6 +27,10 @@ configuration problem, it's an interception problem.
 
 - **The evidence is in this repo's history.** A raw-input capture of both keyboards pressing Home
   produced identical events; only the device handle differed.
+- **The same firmware quirk must be handled on every platform.** This keypad toggles NumLock
+  around each nav key; Windows swallows that churn, and the macOS rule now does too
+  (`keypad_num_lock` → `vk_none`, scoped to the device, so your built-in keyboard's NumLock is
+  never touched).
 - **A keypad's nav keys are often numpad keys in disguise.** Windows converts them
   (NumLock churn plus an E0 scancode); macOS reads the raw HID usage, so the same physical
   key can arrive as `keypad_7` rather than `home`. The generated macOS rule matches **both**,

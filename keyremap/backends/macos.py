@@ -99,6 +99,19 @@ def generate(cfg: Config) -> str:
                 alt = json.loads(json.dumps(m))     # same behaviour, other code
                 alt["from"]["key_code"] = twin
                 manips.append(alt)
+        if cfg.swallow_numlock_quirk:
+            # The same firmware quirk Windows needs handled: the keypad toggles
+            # NumLock around every nav key. Unswallowed, that churn reaches the
+            # system and flips NumLock repeatedly. vk_none is Karabiner's
+            # "produce nothing", and device_if keeps it to this keypad only.
+            manips.append({
+                "type": "basic",
+                "description": "swallow the keypad's NumLock churn",
+                "from": {"key_code": "keypad_num_lock",
+                         "modifiers": {"optional": ["any"]}},
+                "to": [{"key_code": "vk_none"}],
+                "conditions": [cond],
+            })
         rules.append({"description": f"keyremap: {dev}", "manipulators": manips})
     return json.dumps({"title": "keyremap (generated)", "rules": rules}, indent=2)
 

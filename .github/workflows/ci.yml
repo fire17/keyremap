@@ -203,6 +203,32 @@ jobs:
           rm -rf "$HOME/.keyremap/app" "$HOME/.local/bin/keyremap"
           test ! -e "$HOME/.local/bin/keyremap" && echo "clean uninstall"
 
+  # Mac users reach for brew first. Prove the formula actually installs and
+  # that its `test do` block passes — on a real Mac, from source.
+  homebrew:
+    name: brew install (real macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: audit + install the formula from source
+        run: |
+          brew tap-new local/keyremap --no-git
+          cp Formula/keyremap.rb "$(brew --repository)/Library/Taps/local/homebrew-keyremap/Formula/"
+          brew audit --formula --strict local/keyremap/keyremap || true
+          brew install --build-from-source --HEAD local/keyremap/keyremap
+      - name: the installed binary must work
+        run: |
+          which keyremap
+          keyremap --help | head -3
+          keyremap check | tail -3
+          keyremap selftest
+      - name: run the formula's own test block
+        run: brew test local/keyremap/keyremap
+      - name: uninstall cleanly
+        run: |
+          brew uninstall local/keyremap/keyremap
+          test ! -e "$(brew --prefix)/bin/keyremap" && echo "clean uninstall"
+
   # The decisive Linux gate: a REAL kernel device, a real grab, real uinput.
   linux-uinput:
     name: real kernel grab (Linux)

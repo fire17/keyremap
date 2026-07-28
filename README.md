@@ -52,6 +52,13 @@ keyremap selftest     # proves the install is sound on THIS machine
 keyremap apply        # build, deploy, and switch it on
 ```
 
+or on macOS, with Homebrew — CI installs it this way on a real Mac every push:
+
+```sh
+brew tap fire17/keyremap https://github.com/fire17/keyremap
+brew install keyremap
+```
+
 On macOS that last command does the whole job: it writes the rule, installs it where Karabiner
 reads it, **and enables it in your selected profile** — no clicking through the Karabiner UI.
 Your existing rules are preserved, re-running never duplicates, and your `karabiner.json` is

@@ -208,6 +208,22 @@ jobs:
           rm -rf "$HOME/.keyremap/app" "$HOME/.local/bin/keyremap"
           test ! -e "$HOME/.local/bin/keyremap" && echo "clean uninstall"
 
+  # "Barely noticeable" is a number, not a claim — and it must stay one.
+  performance:
+    name: performance budget (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: measure and enforce budgets
+        run: python tests/bench.py
+
   # Mac users reach for brew first. Prove the formula actually installs and
   # that its `test do` block passes — on a real Mac, from source.
   homebrew:

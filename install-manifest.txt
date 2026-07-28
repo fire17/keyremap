@@ -1,0 +1,27 @@
+# Every file the app needs at runtime. install.sh reads this, so a
+# new module can never be forgotten (a hardcoded list already broke
+# a fresh install once). tests/ asserts it stays complete.
+config.yaml
+keyremap/__init__.py
+keyremap/adopt.py
+keyremap/backends/__init__.py
+keyremap/backends/linux_evdev.py
+keyremap/backends/macos.py
+keyremap/backends/windows.py
+keyremap/config.py
+keyremap/data/karabiner_key_codes.json
+keyremap/doctor.py
+keyremap/engine.py
+keyremap/envinfo.py
+keyremap/gui.py
+keyremap/keys.py
+keyremap/miniyaml.py
+keyremap/portable.py
+keyremap/selftest.py
+keyremap/state.py
+keyremap/tui/__init__.py
+keyremap/tui/app.py
+keyremap/tui/term.py
+keyremap/validate.py
+keyremap/webgui.py
+remap.py

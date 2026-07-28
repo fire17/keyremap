@@ -1,16 +1,16 @@
 #!/bin/sh
 # keyremap installer — macOS / Linux / WSL. Idempotent, no sudo, no pip.
 #
-#   curl -fsSL https://raw.githubusercontent.com/OWNER/keyremap/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/fire17/keyremap/master/install.sh | sh
 #   ./install.sh              # from a clone
 #
 # Installs to ~/.keyremap/app and puts a `keyremap` launcher on your PATH.
 set -e
 
-REPO_RAW="${KEYREMAP_RAW:-https://raw.githubusercontent.com/OWNER/keyremap/main}"
+REPO_RAW="${KEYREMAP_RAW:-https://raw.githubusercontent.com/fire17/keyremap/master}"
 APP="$HOME/.keyremap/app"
 BIN_DIR="${KEYREMAP_BIN:-$HOME/.local/bin}"
-SRC="$(CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null && pwd || echo .)"
+SRC_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null && pwd || echo .)"
 
 say() { printf '%s\n' "$*"; }
 
@@ -33,19 +33,24 @@ fi
 mkdir -p "$APP" "$BIN_DIR"
 
 # --- copy or fetch the app ---------------------------------------------------
-FILES="remap.py config.yaml keyremap/__init__.py keyremap/config.py \
-keyremap/keys.py keyremap/envinfo.py keyremap/state.py keyremap/doctor.py \
-keyremap/portable.py keyremap/gui.py keyremap/backends/__init__.py \
-keyremap/backends/windows.py keyremap/backends/macos.py \
-keyremap/backends/linux_evdev.py keyremap/tui/__init__.py keyremap/tui/app.py \
-keyremap/tui/term.py"
+# The file list lives in install-manifest.txt, never inline: a hardcoded list
+# silently went stale once and every command crashed on a fresh install with
+# "cannot import name 'miniyaml'". A test keeps the manifest complete.
+MANIFEST="$APP/.install-manifest.txt"
+if [ -f "$SRC_DIR/install-manifest.txt" ]; then
+  cp "$SRC_DIR/install-manifest.txt" "$MANIFEST"
+else
+  curl -fsSL "$REPO_RAW/install-manifest.txt" -o "$MANIFEST" || {
+    echo "could not fetch install-manifest.txt from $REPO_RAW"; exit 1; }
+fi
+FILES="$(grep -v '^#' "$MANIFEST" | grep -v '^[[:space:]]*$')"
 
 for f in $FILES; do
   mkdir -p "$APP/$(dirname "$f")"
-  if [ -f "$SRC/$f" ]; then
+  if [ -f "$SRC_DIR/$f" ]; then
     # never clobber an existing config
     if [ "$f" = "config.yaml" ] && [ -f "$APP/config.yaml" ]; then continue; fi
-    cp "$SRC/$f" "$APP/$f"
+    cp "$SRC_DIR/$f" "$APP/$f"
   else
     if [ "$f" = "config.yaml" ] && [ -f "$APP/config.yaml" ]; then continue; fi
     curl -fsSL "$REPO_RAW/$f" -o "$APP/$f"

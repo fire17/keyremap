@@ -866,3 +866,36 @@ profiles:
         from keyremap.adopt import rewrite_ids
         _, ok = rewrite_ids(self.SAMPLE, "nosuchdevice", 1, 2)
         self.assertFalse(ok)
+
+
+class TestInstallManifest(unittest.TestCase):
+    """A stale install list shipped a broken install once: every command died
+    with 'cannot import name miniyaml'. This keeps it honest."""
+
+    def setUp(self):
+        self.root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(self.root, "install-manifest.txt")) as f:
+            self.listed = {l.strip() for l in f
+                           if l.strip() and not l.startswith("#")}
+
+    def test_every_runtime_file_is_listed(self):
+        needed = {"remap.py", "config.yaml"}
+        for base, dirs, names in os.walk(os.path.join(self.root, "keyremap")):
+            dirs[:] = [d for d in dirs if d != "__pycache__"]
+            for n in names:
+                if n.endswith((".py", ".json")):
+                    rel = os.path.relpath(os.path.join(base, n), self.root)
+                    needed.add(rel.replace(os.sep, "/"))
+        missing = sorted(needed - self.listed)
+        self.assertEqual(missing, [], f"install.sh would ship a broken app: {missing}")
+
+    def test_nothing_listed_is_missing_from_disk(self):
+        gone = sorted(f for f in self.listed
+                      if not os.path.exists(os.path.join(self.root, f)))
+        self.assertEqual(gone, [], f"manifest lists files that do not exist: {gone}")
+
+    def test_install_script_reads_the_manifest_not_a_hardcoded_list(self):
+        with open(os.path.join(self.root, "install.sh")) as f:
+            sh = f.read()
+        self.assertIn("install-manifest.txt", sh)
+        self.assertNotIn("keyremap/tui/term.py\"", sh)   # the old inline list

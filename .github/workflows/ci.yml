@@ -166,6 +166,7 @@ jobs:
           which keyremap
           keyremap check
           keyremap doctor || true    # warnings expected on a runner
+          keyremap setup --dry-run   # the guided first-run flow
           keyremap selftest
 
       - name: config is installed and re-running never clobbers it

@@ -6,6 +6,7 @@
   detect            list input devices, mark which match config
   listen [SECONDS]  stream keydowns tagged with their source device
   check             validate config against every backend
+  setup             walk a new machine from nothing to working
   doctor            what this machine is missing, and the exact fix
   selftest          prove the install is sound on this machine
   adopt             point the config at the device THIS machine reports
@@ -167,6 +168,11 @@ def cmd_gui(cfg, env, args):
     return serve(cfg.path, port=args.port, open_browser=not args.no_open)
 
 
+def cmd_setup(cfg, env, args):
+    from keyremap.setup import run
+    return run(cfg, assume_yes=args.yes, dry_run=args.dry_run)
+
+
 def cmd_selftest(cfg, env, args):
     from keyremap.selftest import run
     return run(cfg)
@@ -212,6 +218,9 @@ def main():
     sub.add_parser("check")
     sub.add_parser("doctor")
     sub.add_parser("selftest")
+    st = sub.add_parser("setup")
+    st.add_argument("--yes", action="store_true", help="accept every prompt")
+    st.add_argument("--dry-run", action="store_true")
     adp = sub.add_parser("adopt")
     adp.add_argument("--device", help="config device name (default: the first)")
     adp.add_argument("--index", type=int, help="which listed device to adopt")
@@ -233,7 +242,7 @@ def main():
     return {
         "tui": cmd_tui, "gui": cmd_gui, "detect": cmd_detect, "listen": cmd_listen,
         "check": cmd_check, "doctor": cmd_doctor, "apply": cmd_apply,
-        "selftest": cmd_selftest, "adopt": cmd_adopt,
+        "selftest": cmd_selftest, "adopt": cmd_adopt, "setup": cmd_setup,
         "export": cmd_export, "import": cmd_import,
     }[cmd](cfg, env, args)
 

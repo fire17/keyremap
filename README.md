@@ -48,9 +48,14 @@ configuration problem, it's an interception problem.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/fire17/keyremap/HEAD/install.sh | sh
+keyremap setup        # walks a new machine from nothing to working
 keyremap selftest     # proves the install is sound on THIS machine
 keyremap apply        # build, deploy, and switch it on
 ```
+
+`setup` installs what you approve (never silently), skips what's already done, and
+hands you the exact click-path for the two things macOS will not let any program do on
+your behalf: approving the driver extension and granting Input Monitoring.
 
 or on macOS, with Homebrew — CI installs it this way on a real Mac every push:
 

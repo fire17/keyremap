@@ -18,6 +18,7 @@ keyremap/keys.py
 keyremap/miniyaml.py
 keyremap/portable.py
 keyremap/selftest.py
+keyremap/setup.py
 keyremap/state.py
 keyremap/tui/__init__.py
 keyremap/tui/app.py

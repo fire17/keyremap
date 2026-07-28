@@ -1113,3 +1113,74 @@ class TestConsoleGuard(unittest.TestCase):
             if has_glyphs:
                 self.assertIn("from keyremap.console import utf8", src,
                               f"{rel} prints non-ASCII without the console guard")
+
+
+class TestReport(unittest.TestCase):
+    """The report gets pasted into chat — it must be useful and not leak.
+
+    doctor/detect shell out (PowerShell on WSL), so they are stubbed: this
+    tests the report's own logic, and building it once keeps the suite fast.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        cls.cfg = cfgmod.load(os.path.join(here, "config.yaml"),
+                              plat="darwin", host="mac")
+        import types
+        from keyremap import backends, doctor, report
+        real_doctor, real_get = doctor.run, backends.get_backend
+        doctor.run = lambda cfg: [
+            ("ok", "Karabiner-Elements", "installed", ""),
+            ("warn", "configured device", "not connected", "connect it")]
+        fake = types.SimpleNamespace(detect=lambda cfg: [
+            {"name": "Bluetooth Keypad", "instance": "x", "vid": 0x045E,
+             "pid": 0x0040, "matches": ["keypad"]},
+            {"name": "/Users/someone/thing C:\\Users\\Someone\\x",
+             "instance": "y", "vid": None, "pid": None, "matches": []}])
+        backends.get_backend = lambda env: fake
+        try:
+            cls.text = report.build(cls.cfg)
+        finally:
+            doctor.run, backends.get_backend = real_doctor, real_get
+
+    def test_contains_what_a_helper_actually_needs(self):
+        for needed in ("keyremap report", "layers applied",
+                       "Devices this machine", "Doctor", "Effective mappings",
+                       "sha256"):
+            self.assertIn(needed, self.text, f"report is missing {needed!r}")
+
+    def test_redacts_both_posix_and_windows_usernames(self):
+        import getpass
+        self.assertNotIn(os.path.expanduser("~"), self.text)
+        user = getpass.getuser()
+        if len(user) > 2:
+            self.assertNotIn(user, self.text)
+        self.assertNotIn("Someone", self.text)   # Windows-style path
+        self.assertNotIn("someone", self.text)   # POSIX-style path
+        self.assertIn("<user>", self.text)
+
+    def test_lists_every_effective_mapping(self):
+        for src in self.cfg.mappings["keypad"]:
+            self.assertIn(f"`{src}`", self.text)
+
+    def test_is_read_only(self):
+        """Building a report must never touch the config it describes."""
+        import types
+        from keyremap import backends, doctor, report
+        before = os.path.getmtime(self.cfg.path)
+        real_doctor, real_get = doctor.run, backends.get_backend
+        doctor.run = lambda cfg: []
+        backends.get_backend = lambda env: types.SimpleNamespace(
+            detect=lambda cfg: [])
+        try:
+            report.build(self.cfg)
+        finally:
+            doctor.run, backends.get_backend = real_doctor, real_get
+        self.assertEqual(before, os.path.getmtime(self.cfg.path))
+
+    def test_redaction_helper_handles_both_conventions(self):
+        from keyremap.report import _redact
+        out = _redact("C:\\Users\\Alice\\x and /home/bob/y and /Users/carol/z")
+        for name in ("Alice", "bob", "carol"):
+            self.assertNotIn(name, out)
